@@ -22,6 +22,8 @@ export default {
         primary: {
           DEFAULT: "hsl(var(--primary))",
           foreground: "hsl(var(--primary-foreground))",
+          glow: "hsl(var(--primary-glow))",
+          soft: "hsl(var(--primary-soft))",
         },
         secondary: {
           DEFAULT: "hsl(var(--secondary))",
@@ -63,6 +65,14 @@ export default {
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
       },
+      boxShadow: {
+        elevated: "var(--shadow-elevated)",
+        glass: "var(--shadow-glass)",
+      },
+      fontFamily: {
+        sans: ["var(--font-sans)", "ui-sans-serif", "system-ui", "-apple-system", "Segoe UI", "Roboto", "Arial"],
+        display: ["var(--font-display)", "var(--font-sans)", "ui-sans-serif", "system-ui"],
+      },
       keyframes: {
         "accordion-down": {
           from: {
@@ -80,10 +90,16 @@ export default {
             height: "0",
           },
         },
+        "gradient-shift": {
+          "0%": { transform: "translate3d(-6%, -4%, 0) scale(1)" },
+          "50%": { transform: "translate3d(6%, 4%, 0) scale(1.05)" },
+          "100%": { transform: "translate3d(-6%, -4%, 0) scale(1)" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
+        "gradient-shift": "gradient-shift 10s ease-in-out infinite",
       },
     },
   },
