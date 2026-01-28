@@ -101,6 +101,47 @@ export type Database = {
         }
         Relationships: []
       }
+      manufacturing_orders: {
+        Row: {
+          code: string | null
+          created_at: string | null
+          end_date: string | null
+          id: string
+          product_id: string | null
+          quantity: number
+          start_date: string | null
+          status: string | null
+        }
+        Insert: {
+          code?: string | null
+          created_at?: string | null
+          end_date?: string | null
+          id?: string
+          product_id?: string | null
+          quantity: number
+          start_date?: string | null
+          status?: string | null
+        }
+        Update: {
+          code?: string | null
+          created_at?: string | null
+          end_date?: string | null
+          id?: string
+          product_id?: string | null
+          quantity?: number
+          start_date?: string | null
+          status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "manufacturing_orders_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       movements: {
         Row: {
           date: string

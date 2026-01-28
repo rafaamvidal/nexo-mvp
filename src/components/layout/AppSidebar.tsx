@@ -1,4 +1,4 @@
-import { LayoutGrid, Package } from "lucide-react";
+import { LayoutGrid, Package, ShoppingCart, Wallet } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 
 import {
@@ -15,8 +15,11 @@ import {
 import { cn } from "@/lib/utils";
 
 const items = [
-  { title: "Estoque", url: "/", icon: LayoutGrid },
-  { title: "Produtos", url: "/", icon: Package },
+  { title: "Dashboard", url: "/", icon: LayoutGrid },
+  { title: "Estoque", url: "/estoque", icon: LayoutGrid },
+  { title: "Produtos", url: "/produtos", icon: Package },
+  { title: "Vendas", url: "/vendas", icon: ShoppingCart },
+  { title: "Financeiro", url: "/financeiro", icon: Wallet },
 ];
 
 export function AppSidebar() {
