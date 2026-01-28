@@ -1,107 +1,122 @@
 
-## Diagnóstico (por que você ainda não consegue excluir o produto)
-- O banco está bloqueando a exclusão do **produto** por causa do FK:
-  - `stock_movements_product_id_fkey FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE RESTRICT`
-- Isso significa: **se existir qualquer movimentação de estoque** (entrada/saída/ajuste rápido/recebimento/faturamento etc.) para aquele produto, o produto **nunca poderá ser apagado** — mesmo que você já tenha excluído Venda/Compra/Produção.
-- Além disso, a tabela `stock_movements` está corretamente “imutável” (RLS nega DELETE/UPDATE), então “apagar o histórico para conseguir deletar o produto” não é uma opção segura (e nem recomendada).
+Objetivo
+- Evitar conflito de cadastro quando o usuário tenta cadastrar um produto que já existe:
+  - Se já existir Ativo com mesmo nome: bloquear e mostrar “Produto já cadastrado.”
+  - Se já existir Inativo com mesmo nome: não criar novo; oferecer “Reativar e recuperar histórico”; ao confirmar, reativar e atualizar os campos com o que foi digitado (incluindo estoque, conforme sua decisão).
+- Opcional: adicionar botão “Reativar” na listagem quando “Mostrar inativos” estiver ligado.
 
-## Decisão já confirmada
-- Você escolheu: **“Inativar (recomendado)”** quando houver movimentações.
-- E: **ocultar inativos por padrão** na listagem.
+Contexto do código atual (o que encontrei)
+- A tela `src/pages/Produtos.tsx` usa o componente `ProductFormSheet` para “Cadastrar produto” e “Editar”.
+- A criação/edição de produto acontece dentro de `src/components/inventory/ProductFormSheet.tsx` via `upsertMutation`:
+  - Se `product` existe: `update`
+  - Se `product` não existe: `insert`
+- Portanto, a lógica “Verificar antes de Criar” precisa ser implementada no `ProductFormSheet` (não apenas em `Produtos.tsx`), pois é ali que o insert acontece.
 
-## Objetivo desta entrega
-- Manter o comportamento seguro do banco (histórico de movimentações preservado).
-- Fazer a UX do módulo **Produtos** ficar correta e intuitiva:
-  - Quando não dá para excluir (por histórico), permitir **Inativar**.
-  - Produtos inativos somem da lista (por padrão), mas podem ser exibidos via filtro.
+Decisões confirmadas por você (usadas no desenho)
+- Chave de duplicidade: “Apenas Nome”
+- Reativação e estoque: “Usar estoque do formulário” (ou seja: na reativação, vamos atualizar `current_stock` com o valor digitado)
 
----
+Escopo de implementação
 
-## Alterações planejadas (Frontend)
+1) Verificar antes de criar (no ProductFormSheet)
+Arquivo: `src/components/inventory/ProductFormSheet.tsx`
 
-### 1) Ajustar mensagem/fluxo quando falhar a exclusão por FK (23503)
-**Onde:** `src/pages/Produtos.tsx` e `src/lib/supabaseErrors.ts`
+1.1 Normalização do nome
+- Antes de consultar e antes de salvar, normalizar o nome para reduzir falsos negativos por espaços:
+  - `normalized = values.name.trim().replace(/\s+/g, " ")`
+- Observação: o schema já faz `.trim()`, mas vamos reforçar para consulta e comparação.
 
-- Em vez do toast genérico “atrelado a outro módulo”, vamos explicar o motivo real:
-  - “Não é possível excluir porque existe histórico de movimentações de estoque para este produto.”
-- A partir desse ponto, oferecer ação clara: **Inativar produto**.
+1.2 Consulta silenciosa no Supabase
+- Somente no cenário de “Novo Produto” (quando `product` não está definido).
+- Executar uma query leve:
+  - `from("products").select("id,name,status").ilike("name", normalized)`
+  - `limit(5)` (por segurança)
+- Como `ilike` aceita padrão, usaremos sem `%` para equivalência case-insensitive exata. Se houver risco de variações de espaços, fazemos a comparação final no client:
+  - filtrar resultados com `normalizeName(row.name) === normalized`.
 
-Implementação proposta:
-- Manter `isForeignKeyViolation` como está.
-- Evoluir `toastDeleteBlocked(...)` (ou criar uma variante específica) para suportar um texto mais correto para Produto, por exemplo:
-  - `toast.error("Não é possível excluir: este produto possui histórico de movimentações de estoque. Use 'Inativar' para removê-lo do cadastro sem perder histórico.")`
+1.3 Cenário A: encontrou Ativo
+- Critério: `(row.status ?? "Ativo") !== "Inativo"`
+- Ação:
+  - Não criar.
+  - Mostrar erro no campo “Nome” usando `react-hook-form`:
+    - `form.setError("name", { type: "validate", message: "Produto já cadastrado." })`
+  - Manter o Sheet aberto.
 
-### 2) Criar ação “Inativar” no módulo Produtos
-**Onde:** `src/pages/Produtos.tsx`
+1.4 Cenário B: encontrou Inativo (solução)
+- Critério: `(row.status ?? "Ativo") === "Inativo"`
+- Ação:
+  - Não criar.
+  - Abrir um `AlertDialog` controlado (novo estado local no `ProductFormSheet`) com texto:
+    - “Encontramos um produto ‘{nome}’ inativo no sistema. Deseja reativá-lo e recuperar seu histórico?”
+  - Guardar em estado:
+    - `reactivateCandidateId` (id encontrado)
+    - `pendingValues` (valores atuais do formulário que o usuário tentou salvar)
 
-- Adicionar uma mutation `inactivateMutation`:
-  - `update products set status = 'Inativo' where id = ...`
-- UI:
-  - No menu/coluna “Ações”, adicionar um botão/ícone para **Inativar** (com confirmação).
-  - Alternativamente (e melhor UX): quando o usuário clicar Excluir e der 23503, abrir um `AlertDialog` oferecendo:
-    - **Cancelar**
-    - **Inativar produto**
-  - Ao inativar:
-    - toast success “Produto inativado”
-    - invalidar query `["products"]`
+1.5 Confirmou reativação
+- Criar uma mutation dedicada (ou reutilizar `upsertMutation` com um modo “reactivate”, mas prefiro separado para legibilidade):
+  - `reactivateMutation`:
+    - `update products set status='Ativo', ...camposDoFormulario... where id = reactivateCandidateId`
+- Campos atualizados na reativação (conforme seu pedido + consistência do cadastro):
+  - `status: "Ativo"`
+  - `name`, `type`, `category`, `unit`, `min_stock`, `price_cost`, `price_sale`, `current_stock`
+- Sucesso:
+  - Toast: “Produto reativado com sucesso!”
+  - Invalidar `["products"]`
+  - Fechar AlertDialog e Sheet
+  - Reset do form
 
-Regras:
-- Se o produto já estiver “Inativo”, esconder o botão de inativar (ou trocar para “Reativar”, se você quiser — posso deixar preparado, mas só implemento se você pedir).
+1.6 Cancelou reativação
+- Apenas fecha o AlertDialog e mantém o formulário aberto para o usuário ajustar (sem criar nada).
 
-### 3) Ocultar produtos Inativos por padrão + alternância para exibir
-**Onde:** `src/pages/Produtos.tsx`
+1.7 Tratamento de concorrência (edge case)
+- Se por alguma razão, no momento da reativação o update falhar (ex.: RLS, rede), mostrar toast com `e.message`.
+- Se existirem múltiplos produtos inativos com o mesmo nome (não deveria, mas pode ocorrer):
+  - Vamos escolher o primeiro match (ordenar por `created_at desc` se necessário; hoje o select não traz `created_at`, então ou incluímos ou aceitamos o primeiro retornado).
+  - Opcional futuro: apresentar lista de candidatos para escolher. Não faremos agora para manter simples.
 
-- Adicionar um estado local: `showInactive` (default `false`)
-- Ajustar `fetchProducts()` ou o `useMemo` do filtro:
-  - Por padrão: filtrar fora `status = 'Inativo'`
-  - Se `showInactive = true`, mostrar tudo
-- Na UI perto dos filtros/busca:
-  - adicionar um `Switch` ou `Checkbox`: “Mostrar inativos”
-- Quando inativos estiverem visíveis, mostrar um `Badge` “Inativo” na linha.
+2) Refinamento visual opcional: botão “Reativar” na listagem
+Arquivo: `src/pages/Produtos.tsx`
 
-### 4) Ajustar contadores e cards para respeitar o filtro (ou explicitar)
-**Onde:** `src/pages/Produtos.tsx`
+2.1 UI
+- Quando `showInactive` estiver ligado e a linha estiver `inactive === true`:
+  - Exibir um botão de ação “Reativar” ao lado de Editar/Excluir/Ajuste Rápido.
+  - Ícone sugerido: `RotateCcw` ou `RefreshCw` (lucide-react).
 
-Hoje:
-- “Itens cadastrados” usa `(data ?? []).length` (inclui inativos, se existirem).
-- “Estoque baixo” e “Valor total em estoque” também usam `data`.
+2.2 Comportamento
+- `reactivateMutation` (novo no `Produtos.tsx`):
+  - `update products set status='Ativo' where id = ...`
+  - (Opcional: não mexer em outros campos aqui; é uma reativação simples)
+- Sucesso:
+  - Toast: “Produto reativado”
+  - Invalidar `["products"]`
+- Observação de UX:
+  - Quando reativar, como a lista por padrão esconde inativos, se `showInactive` estiver false o item já voltará a aparecer normalmente. Se `showInactive` estiver true, ele seguirá visível, mas sem badge “Inativo”.
 
-Proposta:
-- Por padrão, calcular esses cards com base apenas em **ativos** (para bater com o que o usuário vê).
-- Se `showInactive = true`, você pode escolher:
-  - (A) manter os cards considerando tudo (ativos + inativos), ou
-  - (B) continuar considerando apenas ativos, mas mostrar um texto pequeno “Considera apenas ativos”.
-Eu vou implementar (B) para evitar confusão e manter KPI coerente com operação.
+Arquivos que serão alterados
+- `src/components/inventory/ProductFormSheet.tsx`
+  - Implementar verificação antes de criar
+  - Implementar AlertDialog de reativação
+  - Implementar `reactivateMutation`
+- `src/pages/Produtos.tsx` (opcional, conforme seu item 2)
+  - Adicionar botão “Reativar” quando estiver exibindo inativos
+  - Adicionar mutation de reativação simples
 
----
+Sem alterações no banco
+- Não vamos criar constraint unique agora.
+- A solução é toda no fluxo do app (como você solicitou).
 
-## Alterações planejadas (Banco) — NÃO necessárias para resolver seu problema
-- Nenhuma mudança de schema é necessária para esse ajuste.
-- Não vamos mexer no FK `ON DELETE RESTRICT` (ele é o que garante integridade + auditoria).
+Roteiro de teste end-to-end (para você validar)
+1) Com “Mostrar inativos” ligado, inative um produto qualquer (ex.: “Açúcar”).
+2) Tente cadastrar um novo produto com o mesmo nome “Açúcar”:
+   - Deve abrir o AlertDialog perguntando se deseja reativar.
+3) Confirme:
+   - Deve reativar o produto existente (mesmo ID), atualizar campos (incluindo estoque), e mostrar toast “Produto reativado com sucesso!”.
+4) Agora tente cadastrar novamente “Açúcar” (com ele Ativo):
+   - Deve dar erro no campo “Nome”: “Produto já cadastrado.”
+5) (Opcional) Com “Mostrar inativos” ligado, clique “Reativar” direto na linha:
+   - Deve voltar para Ativo e atualizar a listagem.
 
----
-
-## Teste end-to-end (roteiro de validação)
-1) Criar produto, fazer um ajuste de estoque (+ / -).
-2) Tentar excluir o produto:
-   - Deve bloquear exclusão e oferecer opção de **Inativar** (sem erro técnico).
-3) Inativar produto:
-   - Deve sumir da lista (com “Mostrar inativos” desligado).
-4) Ligar “Mostrar inativos”:
-   - Produto aparece com badge “Inativo”.
-5) Garantir que relatórios/módulos que listam produtos (Vendas/Compras/Produção) se comportam como esperado:
-   - Se atualmente eles puxam produtos sem filtrar status, decidir depois se devemos esconder inativos também nesses selects (posso fazer isso numa próxima etapa, para não quebrar fluxos existentes).
-
----
-
-## Arquivos que serão alterados
-- `src/pages/Produtos.tsx`
-- `src/lib/supabaseErrors.ts` (apenas mensagens/variações para ficar mais preciso no caso de produto)
-
----
-
-## Observação importante (alinhamento de regra de negócio)
-O comportamento correto é:
-- **Documentos operacionais (vendas/compras/produção)** você pode excluir/cancelar.
-- **Histórico de estoque (`stock_movements`)** deve permanecer para auditoria.
-- Portanto, “Excluir produto” só será possível para produtos que **nunca tiveram movimentação**. Para os demais, o caminho correto é **Inativar**.
+Notas técnicas (para evitar bugs comuns)
+- Usar `form.setError` para o erro “Produto já cadastrado” garante que o feedback fica no campo como você pediu.
+- Não usar `.single()` na consulta de verificação, porque pode não haver resultado (melhor trabalhar com array).
+- Garantir que a verificação só roda no fluxo “novo produto” para não atrapalhar edição.
