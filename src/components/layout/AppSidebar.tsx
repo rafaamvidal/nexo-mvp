@@ -25,6 +25,9 @@ const items = [
   { title: "Financeiro", url: "/financeiro", icon: Wallet },
 ];
 
+const LOGO_URL =
+  "https://lesmncgjcvguyizzjvrw.supabase.co/storage/v1/object/public/branding/nexo_erp_logo.jpg";
+
 export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
@@ -36,7 +39,16 @@ export function AppSidebar() {
       <SidebarContent>
         <SidebarGroup>
           <SidebarGroupLabel className="px-2">
-            <span className={cn("font-semibold", collapsed && "sr-only")}>ERP Estoque</span>
+            <span className="sr-only">Nexo ERP</span>
+            <img
+              src={LOGO_URL}
+              alt="Nexo ERP"
+              loading="lazy"
+              className={cn(
+                "h-auto w-[140px] max-w-full object-contain drop-shadow-sm dark:brightness-110 dark:contrast-110",
+                collapsed && "hidden",
+              )}
+            />
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>

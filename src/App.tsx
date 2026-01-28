@@ -1,3 +1,4 @@
+import * as React from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -18,86 +19,94 @@ import { RequireAuth } from "@/components/auth/RequireAuth";
 
 const queryClient = new QueryClient();
 
-const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <AuthProvider>
-        <BrowserRouter>
-          <Routes>
-            <Route path="/auth" element={<Auth />} />
-            <Route
-              path="/"
-              element={
-                <RequireAuth>
-                  <DashboardHome />
-                </RequireAuth>
-              }
-            />
-            <Route
-              path="/estoque"
-              element={
-                <RequireAuth>
-                  <Estoque />
-                </RequireAuth>
-              }
-            />
-            <Route
-              path="/produtos"
-              element={
-                <RequireAuth>
-                  <Produtos />
-                </RequireAuth>
-              }
-            />
-            <Route
-              path="/vendas"
-              element={
-                <RequireAuth>
-                  <Vendas />
-                </RequireAuth>
-              }
-            />
-            <Route
-              path="/financeiro"
-              element={
-                <RequireAuth>
-                  <Financeiro />
-                </RequireAuth>
-              }
-            />
-            <Route
-              path="/cadastros"
-              element={
-                <RequireAuth>
-                  <Cadastros />
-                </RequireAuth>
-              }
-            />
-            <Route
-              path="/compras"
-              element={
-                <RequireAuth>
-                  <Compras />
-                </RequireAuth>
-              }
-            />
-            <Route
-              path="/producao"
-              element={
-                <RequireAuth>
-                  <Producao />
-                </RequireAuth>
-              }
-            />
-            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </BrowserRouter>
-      </AuthProvider>
-    </TooltipProvider>
-  </QueryClientProvider>
-);
+const BRAND_TITLE = "Nexo ERP | Gestão Inteligente";
+
+const App = () => {
+  React.useEffect(() => {
+    document.title = BRAND_TITLE;
+  }, []);
+
+  return (
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <AuthProvider>
+          <BrowserRouter>
+            <Routes>
+              <Route path="/auth" element={<Auth />} />
+              <Route
+                path="/"
+                element={
+                  <RequireAuth>
+                    <DashboardHome />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/estoque"
+                element={
+                  <RequireAuth>
+                    <Estoque />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/produtos"
+                element={
+                  <RequireAuth>
+                    <Produtos />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/vendas"
+                element={
+                  <RequireAuth>
+                    <Vendas />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/financeiro"
+                element={
+                  <RequireAuth>
+                    <Financeiro />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/cadastros"
+                element={
+                  <RequireAuth>
+                    <Cadastros />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/compras"
+                element={
+                  <RequireAuth>
+                    <Compras />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/producao"
+                element={
+                  <RequireAuth>
+                    <Producao />
+                  </RequireAuth>
+                }
+              />
+              {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </BrowserRouter>
+        </AuthProvider>
+      </TooltipProvider>
+    </QueryClientProvider>
+  );
+};
 
 export default App;
