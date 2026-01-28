@@ -231,6 +231,92 @@ export type Database = {
         }
         Relationships: []
       }
+      purchase_items: {
+        Row: {
+          id: string
+          product_id: string | null
+          purchase_order_id: string | null
+          quantity: number
+          total: number
+          unit_cost: number
+        }
+        Insert: {
+          id?: string
+          product_id?: string | null
+          purchase_order_id?: string | null
+          quantity: number
+          total: number
+          unit_cost: number
+        }
+        Update: {
+          id?: string
+          product_id?: string | null
+          purchase_order_id?: string | null
+          quantity?: number
+          total?: number
+          unit_cost?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "purchase_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_items_purchase_order_id_fkey"
+            columns: ["purchase_order_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      purchase_orders: {
+        Row: {
+          code: string | null
+          created_at: string
+          expected_delivery_date: string | null
+          id: string
+          observations: string | null
+          order_date: string | null
+          status: string | null
+          supplier_id: string | null
+          total_amount: number | null
+        }
+        Insert: {
+          code?: string | null
+          created_at?: string
+          expected_delivery_date?: string | null
+          id?: string
+          observations?: string | null
+          order_date?: string | null
+          status?: string | null
+          supplier_id?: string | null
+          total_amount?: number | null
+        }
+        Update: {
+          code?: string | null
+          created_at?: string
+          expected_delivery_date?: string | null
+          id?: string
+          observations?: string | null
+          order_date?: string | null
+          status?: string | null
+          supplier_id?: string | null
+          total_amount?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "purchase_orders_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sale_items: {
         Row: {
           id: string

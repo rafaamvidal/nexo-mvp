@@ -8,6 +8,9 @@ import Estoque from "./pages/Estoque";
 import Produtos from "./pages/Produtos";
 import Vendas from "./pages/Vendas";
 import Financeiro from "./pages/Financeiro";
+import Compras from "./pages/Compras";
+import Producao from "./pages/Producao";
+import Cadastros from "./pages/Cadastros";
 import NotFound from "./pages/NotFound";
 import Auth from "./pages/Auth";
 import { AuthProvider } from "@/hooks/useAuth";
@@ -61,6 +64,30 @@ const App = () => (
               element={
                 <RequireAuth>
                   <Financeiro />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/cadastros"
+              element={
+                <RequireAuth>
+                  <Cadastros />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/compras"
+              element={
+                <RequireAuth>
+                  <Compras />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/producao"
+              element={
+                <RequireAuth>
+                  <Producao />
                 </RequireAuth>
               }
             />

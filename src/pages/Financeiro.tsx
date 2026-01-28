@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -40,6 +41,21 @@ async function fetchFinancial(): Promise<FinRow[]> {
 export default function Financeiro() {
   const qc = useQueryClient();
   const { data, isLoading, error } = useQuery({ queryKey: ["financial_records"], queryFn: fetchFinancial });
+
+  const [q, setQ] = React.useState("");
+  const filtered = React.useMemo(() => {
+    const list = data ?? [];
+    const term = q.trim().toLowerCase();
+    if (!term) return list;
+    return list.filter((r) => {
+      return (
+        r.description.toLowerCase().includes(term) ||
+        (r.category ?? "").toLowerCase().includes(term) ||
+        (r.type ?? "").toLowerCase().includes(term) ||
+        (r.status ?? "").toLowerCase().includes(term)
+      );
+    });
+  }, [data, q]);
 
   const [open, setOpen] = React.useState(false);
   const [type, setType] = React.useState<string>("Receber");
@@ -84,6 +100,10 @@ export default function Financeiro() {
           <div>
             <h1 className="text-balance text-2xl font-extrabold">Financeiro</h1>
             <p className="mt-1 text-sm text-muted-foreground">Extrato e lançamentos (Receita/Despesa).</p>
+          </div>
+
+          <div className="relative w-full md:w-[360px]">
+            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar descrição/categoria…" />
           </div>
 
           <Dialog open={open} onOpenChange={setOpen}>
@@ -176,37 +196,39 @@ export default function Financeiro() {
             </Card>
           )}
 
-          {!isLoading && !error && (data ?? []).length > 0 && (
+          {!isLoading && !error && (filtered ?? []).length > 0 && (
             <Card className="glass overflow-hidden rounded-xl border border-border/60">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Data</TableHead>
-                    <TableHead>Descrição</TableHead>
-                    <TableHead>Categoria</TableHead>
-                    <TableHead className="text-right">Valor</TableHead>
-                    <TableHead>Status</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {(data ?? []).map((r) => {
-                    const isReceita = (r.type ?? "").toLowerCase() === "receber";
-                    return (
-                      <TableRow key={r.id} className="odd:bg-muted/20">
-                        <TableCell className="text-sm text-muted-foreground">
-                          {new Date(r.due_date).toLocaleDateString("pt-BR")}
-                        </TableCell>
-                        <TableCell className="font-semibold">{r.description}</TableCell>
-                        <TableCell className="text-muted-foreground">{r.category ?? "—"}</TableCell>
-                        <TableCell className={"text-right font-extrabold " + (isReceita ? "text-primary" : "text-destructive")}>
-                          {formatBRL(Number(r.amount ?? 0))}
-                        </TableCell>
-                        <TableCell>{r.status ?? "—"}</TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
+              <ScrollArea className="max-h-[70vh]">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Data</TableHead>
+                      <TableHead>Descrição</TableHead>
+                      <TableHead>Categoria</TableHead>
+                      <TableHead className="text-right">Valor</TableHead>
+                      <TableHead>Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {(filtered ?? []).map((r) => {
+                      const isReceita = (r.type ?? "").toLowerCase() === "receber";
+                      return (
+                        <TableRow key={r.id} className="odd:bg-muted/20">
+                          <TableCell className="text-sm text-muted-foreground">
+                            {new Date(r.due_date).toLocaleDateString("pt-BR")}
+                          </TableCell>
+                          <TableCell className="font-semibold">{r.description}</TableCell>
+                          <TableCell className="text-muted-foreground">{r.category ?? "—"}</TableCell>
+                          <TableCell className={"text-right font-extrabold " + (isReceita ? "text-primary" : "text-destructive")}>
+                            {formatBRL(Number(r.amount ?? 0))}
+                          </TableCell>
+                          <TableCell>{r.status ?? "—"}</TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </ScrollArea>
             </Card>
           )}
         </div>

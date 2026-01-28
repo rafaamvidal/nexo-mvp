@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, ShoppingCart } from "lucide-react";
+import { Plus, Search, ShoppingCart } from "lucide-react";
 
 import { AppShell } from "@/components/layout/AppShell";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/co
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -65,6 +66,7 @@ export default function Vendas() {
   const { data: clients } = useQuery({ queryKey: ["clients"], queryFn: fetchClients });
   const { data: products } = useQuery({ queryKey: ["products", "for-sale"], queryFn: fetchProductsForSale });
 
+  const [q, setQ] = React.useState("");
   const [open, setOpen] = React.useState(false);
   const [clientId, setClientId] = React.useState<string>("");
   const [status, setStatus] = React.useState<string>("Pedido");
@@ -113,6 +115,21 @@ export default function Vendas() {
           if (mvErr) throw mvErr;
         }
       }
+
+      // Integração com financeiro: somente quando Faturado
+      if (status === "Faturado") {
+        const dueDate = new Date().toISOString().slice(0, 10);
+        const { error: finErr } = await supabase.from("financial_records").insert({
+          type: "Receber",
+          description: `Venda (Faturado) - ${saleId.slice(0, 8)}`,
+          category: "Vendas",
+          entity_name: (clients ?? []).find((c) => c.id === clientId)?.name ?? null,
+          amount: Number(total),
+          due_date: dueDate,
+          status: "Aberto",
+        } as any);
+        if (finErr) throw finErr;
+      }
     },
     onSuccess: async () => {
       toast.success("Venda registrada");
@@ -122,9 +139,20 @@ export default function Vendas() {
       setItems([{ product_id: "", quantity: 1 }]);
       await qc.invalidateQueries({ queryKey: ["sales"] });
       await qc.invalidateQueries({ queryKey: ["products"] });
+      await qc.invalidateQueries({ queryKey: ["financial_records"] });
     },
     onError: (e: any) => toast.error(e?.message ?? "Erro ao salvar venda"),
   });
+
+  const filtered = React.useMemo(() => {
+    const list = data ?? [];
+    const term = q.trim().toLowerCase();
+    if (!term) return list;
+    return list.filter((s) => {
+      const client = (s.clients?.name ?? "").toLowerCase();
+      return client.includes(term) || (s.status ?? "").toLowerCase().includes(term) || (s.code ?? "").toLowerCase().includes(term);
+    });
+  }, [data, q]);
 
   return (
     <AppShell title="Vendas">
@@ -133,6 +161,11 @@ export default function Vendas() {
           <div>
             <h1 className="text-balance text-2xl font-extrabold">Vendas</h1>
             <p className="mt-1 text-sm text-muted-foreground">Lista de vendas (Orçamento, Pedido, Faturado) e criação rápida.</p>
+          </div>
+
+          <div className="relative w-full md:w-[360px]">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar cliente/status…" className="pl-9" />
           </div>
 
           <Sheet open={open} onOpenChange={setOpen}>
@@ -279,28 +312,30 @@ export default function Vendas() {
 
           {!isLoading && !error && (data ?? []).length > 0 && (
             <Card className="glass overflow-hidden rounded-xl border border-border/60">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Data</TableHead>
-                    <TableHead>Cliente</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Total</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {(data ?? []).map((s) => (
-                    <TableRow key={s.id} className="odd:bg-muted/20">
-                      <TableCell className="text-sm text-muted-foreground">
-                        {new Date(s.created_at).toLocaleDateString("pt-BR")}
-                      </TableCell>
-                      <TableCell className="font-semibold">{s.clients?.name ?? "—"}</TableCell>
-                      <TableCell>{s.status ?? "—"}</TableCell>
-                      <TableCell className="text-right font-bold">{formatBRL(Number(s.total_amount ?? 0))}</TableCell>
+              <ScrollArea className="max-h-[70vh]">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Data</TableHead>
+                      <TableHead>Cliente</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Total</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {(filtered ?? []).map((s) => (
+                      <TableRow key={s.id} className="odd:bg-muted/20">
+                        <TableCell className="text-sm text-muted-foreground">
+                          {new Date(s.created_at).toLocaleDateString("pt-BR")}
+                        </TableCell>
+                        <TableCell className="font-semibold">{s.clients?.name ?? "—"}</TableCell>
+                        <TableCell>{s.status ?? "—"}</TableCell>
+                        <TableCell className="text-right font-bold">{formatBRL(Number(s.total_amount ?? 0))}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </ScrollArea>
             </Card>
           )}
         </div>
