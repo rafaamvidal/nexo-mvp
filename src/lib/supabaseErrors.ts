@@ -14,3 +14,9 @@ export function toastDeleteBlocked(context?: string) {
     `Exclusão bloqueada: Este item possui movimentações${suffix}. Cancele as vendas/compras associadas antes de excluir.`,
   );
 }
+
+export function toastProductDeleteBlocked() {
+  toast.error(
+    "Não é possível excluir: este produto possui histórico de movimentações de estoque. Use ‘Inativar’ para removê-lo do cadastro sem perder o histórico.",
+  );
+}
