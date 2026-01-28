@@ -26,7 +26,8 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
-import { isForeignKeyViolation, toastDeleteBlocked } from "@/lib/supabaseErrors";
+import { Switch } from "@/components/ui/switch";
+import { isForeignKeyViolation, toastProductDeleteBlocked } from "@/lib/supabaseErrors";
 
 type Filter = "Todos" | ProductType;
 
@@ -77,28 +78,34 @@ export default function Produtos() {
   const qc = useQueryClient();
   const [filter, setFilter] = React.useState<Filter>("Todos");
   const [q, setQ] = React.useState("");
+  const [showInactive, setShowInactive] = React.useState(false);
+  const [inactivateTarget, setInactivateTarget] = React.useState<{ id: string; name: string } | null>(null);
   const { data, isLoading, error } = useQuery({ queryKey: ["products"], queryFn: fetchProducts });
 
+  const activeProducts = React.useMemo(() => {
+    return (data ?? []).filter((p) => (p.status ?? "Ativo") !== "Inativo");
+  }, [data]);
+
   const products = React.useMemo(() => {
-    const list = data ?? [];
+    const list = showInactive ? data ?? [] : activeProducts;
     const term = q.trim().toLowerCase();
     const byType = filter === "Todos" ? list : list.filter((p) => p.type === filter);
     if (!term) return byType;
     return byType.filter((p) => p.name.toLowerCase().includes(term) || (p.category ?? "").toLowerCase().includes(term));
-  }, [data, filter, q]);
+  }, [activeProducts, data, filter, q, showInactive]);
 
   const lowStockCount = React.useMemo(
-    () => (data ?? []).filter((p) => Number(p.current_stock) < Number(p.min_stock)).length,
-    [data],
+    () => activeProducts.filter((p) => Number(p.current_stock) < Number(p.min_stock)).length,
+    [activeProducts],
   );
 
   const totalStockValue = React.useMemo(() => {
-    return (data ?? []).reduce((acc, p) => {
+    return activeProducts.reduce((acc, p) => {
       const qty = Number(p.current_stock ?? 0);
       const cost = Number(p.price_cost ?? 0);
       return acc + qty * cost;
     }, 0);
-  }, [data]);
+  }, [activeProducts]);
 
   const mappedEditable = React.useCallback((p: Product): EditableProduct => {
     return {
@@ -119,6 +126,21 @@ export default function Produtos() {
     return <Badge>Produto final</Badge>;
   }, []);
 
+  const inactivateMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("products").update({ status: "Inativo" }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: async () => {
+      toast.success("Produto inativado");
+      setInactivateTarget(null);
+      await qc.invalidateQueries({ queryKey: ["products"] });
+    },
+    onError: (e: any) => {
+      toast.error(e?.message ?? "Erro ao inativar");
+    },
+  });
+
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase.from("products").delete().eq("id", id);
@@ -129,7 +151,11 @@ export default function Produtos() {
       await qc.invalidateQueries({ queryKey: ["products"] });
     },
     onError: (e: any) => {
-      if (isForeignKeyViolation(e)) return toastDeleteBlocked("Estoque/Vendas/Compras");
+      if (isForeignKeyViolation(e)) {
+        toastProductDeleteBlocked();
+        // se houver histórico de estoque, a alternativa correta é inativar
+        return;
+      }
       toast.error(e?.message ?? "Erro ao excluir");
     },
   });
@@ -157,6 +183,13 @@ export default function Produtos() {
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar produto/categoria…" className="pl-9" />
             </div>
+            <div className="flex items-center justify-between gap-3 rounded-lg border border-border/60 bg-card/40 px-3 py-2 md:w-[360px]">
+              <div className="min-w-0">
+                <p className="text-sm font-semibold leading-none">Mostrar inativos</p>
+                <p className="mt-1 text-xs text-muted-foreground">Exibe produtos com status Inativo</p>
+              </div>
+              <Switch checked={showInactive} onCheckedChange={setShowInactive} aria-label="Mostrar inativos" />
+            </div>
             <FilterChips value={filter} onChange={setFilter} />
             <ProductFormSheet />
           </div>
@@ -170,7 +203,7 @@ export default function Produtos() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-extrabold">{formatBRL(totalStockValue)}</div>
-              <p className="mt-1 text-xs text-muted-foreground">Soma de custo × estoque atual</p>
+              <p className="mt-1 text-xs text-muted-foreground">Soma de custo × estoque atual (apenas ativos)</p>
             </CardContent>
           </Card>
 
@@ -181,7 +214,7 @@ export default function Produtos() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-extrabold">{lowStockCount}</div>
-              <p className="mt-1 text-xs text-muted-foreground">Abaixo do estoque mínimo</p>
+              <p className="mt-1 text-xs text-muted-foreground">Abaixo do estoque mínimo (apenas ativos)</p>
             </CardContent>
           </Card>
 
@@ -191,8 +224,8 @@ export default function Produtos() {
               <Package className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-extrabold">{(data ?? []).length}</div>
-              <p className="mt-1 text-xs text-muted-foreground">Produtos no catálogo</p>
+              <div className="text-2xl font-extrabold">{activeProducts.length}</div>
+              <p className="mt-1 text-xs text-muted-foreground">Produtos ativos no catálogo</p>
             </CardContent>
           </Card>
         </div>
@@ -240,12 +273,14 @@ export default function Produtos() {
                   <TableBody>
                     {products.map((p) => {
                       const low = Number(p.current_stock) < Number(p.min_stock);
+                      const inactive = (p.status ?? "Ativo") === "Inativo";
                       return (
                         <TableRow key={p.id} className="odd:bg-muted/20">
                           <TableCell className="font-semibold">
                             <div className="flex items-center gap-2">
                               <span className="truncate">{p.name}</span>
                               {low && <Badge variant="destructive">Baixo</Badge>}
+                              {showInactive && inactive && <Badge variant="outline">Inativo</Badge>}
                             </div>
                           </TableCell>
                           <TableCell className="text-muted-foreground">{p.category ?? "—"}</TableCell>
@@ -281,7 +316,19 @@ export default function Produtos() {
                                   </AlertDialogHeader>
                                   <AlertDialogFooter>
                                     <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                    <AlertDialogAction onClick={() => deleteMutation.mutate(p.id)} disabled={deleteMutation.isPending}>
+                                    <AlertDialogAction
+                                      onClick={() => {
+                                        deleteMutation.mutate(p.id, {
+                                          onError: (e: any) => {
+                                            if (isForeignKeyViolation(e)) {
+                                              setInactivateTarget({ id: p.id, name: p.name });
+                                              return;
+                                            }
+                                          },
+                                        });
+                                      }}
+                                      disabled={deleteMutation.isPending}
+                                    >
                                       Excluir
                                     </AlertDialogAction>
                                   </AlertDialogFooter>
@@ -299,6 +346,28 @@ export default function Produtos() {
             </Card>
           )}
         </div>
+
+        {/* Dialog controlado para oferecer Inativar quando delete for bloqueado por movimentações */}
+        <AlertDialog open={!!inactivateTarget} onOpenChange={(open) => (!open ? setInactivateTarget(null) : null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Não é possível excluir</AlertDialogTitle>
+              <AlertDialogDescription>
+                O produto <span className="font-semibold">{inactivateTarget?.name}</span> possui histórico de movimentações de estoque.
+                Para manter a rastreabilidade, você pode inativá-lo (ele será ocultado da lista por padrão).
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => inactivateTarget && inactivateMutation.mutate(inactivateTarget.id)}
+                disabled={inactivateMutation.isPending}
+              >
+                Inativar produto
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </section>
     </AppShell>
   );
