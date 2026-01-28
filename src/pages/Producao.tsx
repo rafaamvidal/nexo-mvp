@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Factory, Plus, Search, CheckCircle2 } from "lucide-react";
+import { CheckCircle2, Pencil, Plus, Search, Trash2, XCircle } from "lucide-react";
 
 import { AppShell } from "@/components/layout/AppShell";
 import { Badge } from "@/components/ui/badge";
@@ -15,6 +15,18 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { isForeignKeyViolation, toastDeleteBlocked } from "@/lib/supabaseErrors";
 
 type FinishedProductRow = { id: string; name: string };
 type ManufacturingOrderRow = {
@@ -34,6 +46,7 @@ function statusBadge(status: string | null) {
   if (s === "planejada") return <Badge variant="secondary">Planejada</Badge>;
   if (s === "em produção") return <Badge>Em Produção</Badge>;
   if (s === "finalizada") return <Badge variant="outline">Finalizada</Badge>;
+  if (s === "cancelada") return <Badge variant="destructive">Cancelada</Badge>;
   return <Badge variant="outline">{status ?? "—"}</Badge>;
 }
 
@@ -66,6 +79,11 @@ export default function Producao() {
   const [open, setOpen] = React.useState(false);
   const [productId, setProductId] = React.useState<string>("");
   const [quantity, setQuantity] = React.useState<number>(1);
+
+  const [editOpen, setEditOpen] = React.useState(false);
+  const [editing, setEditing] = React.useState<ManufacturingOrderRow | null>(null);
+  const [editProductId, setEditProductId] = React.useState<string>("");
+  const [editQty, setEditQty] = React.useState<number>(1);
 
   const filtered = React.useMemo(() => {
     const list = data ?? [];
@@ -146,6 +164,78 @@ export default function Producao() {
     onError: (e: any) => toast.error(e?.message ?? "Erro ao finalizar"),
   });
 
+  const cancelMO = useMutation({
+    mutationFn: async (mo: ManufacturingOrderRow) => {
+      const prev = mo.status ?? "";
+      if (prev === "Cancelada") return;
+      if (!mo.product_id) throw new Error("Ordem sem produto");
+
+      // Se já finalizada, estorna o produto final (Saída)
+      if (prev === "Finalizada") {
+        const { error: mvErr } = await (supabase as any).rpc("apply_movement", {
+          p_product_id: mo.product_id,
+          p_type: "Saída",
+          p_quantity: Number(mo.quantity ?? 0),
+          p_reason: "Produção (Cancelamento)",
+          p_reference_id: mo.id,
+        });
+        if (mvErr) throw mvErr;
+      }
+
+      const { error: upErr } = await supabase.from("manufacturing_orders").update({ status: "Cancelada" } as any).eq("id", mo.id);
+      if (upErr) throw upErr;
+    },
+    onSuccess: async () => {
+      toast.success("Ordem cancelada");
+      await qc.invalidateQueries({ queryKey: ["manufacturing_orders"] });
+      await qc.invalidateQueries({ queryKey: ["products"] });
+    },
+    onError: (e: any) => toast.error(e?.message ?? "Erro ao cancelar"),
+  });
+
+  const deleteMO = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("manufacturing_orders").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: async () => {
+      toast.success("Ordem excluída");
+      await qc.invalidateQueries({ queryKey: ["manufacturing_orders"] });
+    },
+    onError: (e: any) => {
+      if (isForeignKeyViolation(e)) return toastDeleteBlocked("Produção/Estoque");
+      toast.error(e?.message ?? "Erro ao excluir");
+    },
+  });
+
+  const saveEdit = useMutation({
+    mutationFn: async () => {
+      if (!editing) return;
+      if ((editing.status ?? "") !== "Planejada") throw new Error("Apenas ordens Planejadas podem ser editadas neste MVP");
+      if (!editProductId) throw new Error("Selecione o produto final");
+      if (!editQty || Number(editQty) <= 0) throw new Error("Quantidade inválida");
+      const { error } = await supabase
+        .from("manufacturing_orders")
+        .update({ product_id: editProductId, quantity: Number(editQty) } as any)
+        .eq("id", editing.id);
+      if (error) throw error;
+    },
+    onSuccess: async () => {
+      toast.success("Ordem atualizada");
+      setEditOpen(false);
+      setEditing(null);
+      await qc.invalidateQueries({ queryKey: ["manufacturing_orders"] });
+    },
+    onError: (e: any) => toast.error(e?.message ?? "Erro ao salvar alterações"),
+  });
+
+  const openEditDialog = (mo: ManufacturingOrderRow) => {
+    setEditing(mo);
+    setEditProductId(mo.product_id ?? "");
+    setEditQty(Number(mo.quantity ?? 1));
+    setEditOpen(true);
+  };
+
   return (
     <AppShell title="Produção">
       <section className="mx-auto max-w-6xl">
@@ -200,6 +290,40 @@ export default function Producao() {
                 </div>
               </DialogContent>
             </Dialog>
+
+            <Dialog open={editOpen} onOpenChange={setEditOpen}>
+              <DialogContent className="sm:max-w-lg">
+                <DialogHeader>
+                  <DialogTitle>Editar Ordem</DialogTitle>
+                </DialogHeader>
+                {editing && (
+                  <div className="grid gap-4">
+                    <div className="grid gap-2">
+                      <Label>Produto Final</Label>
+                      <Select value={editProductId} onValueChange={setEditProductId} disabled={(editing.status ?? "") !== "Planejada"}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione…" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {(finished ?? []).map((p) => (
+                            <SelectItem key={p.id} value={p.id}>
+                              {p.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="grid gap-2">
+                      <Label>Quantidade</Label>
+                      <Input type="number" min={1} value={editQty} onChange={(e) => setEditQty(Number(e.target.value))} disabled={(editing.status ?? "") !== "Planejada"} />
+                    </div>
+                    <Button type="button" variant="hero" onClick={() => saveEdit.mutate()} disabled={saveEdit.isPending}>
+                      Salvar alterações
+                    </Button>
+                  </div>
+                )}
+              </DialogContent>
+            </Dialog>
           </div>
         </div>
 
@@ -252,7 +376,7 @@ export default function Producao() {
                             <Select
                               value={o.status ?? "Planejada"}
                               onValueChange={(v) => updateStatus.mutate({ id: o.id, next: v })}
-                              disabled={(o.status ?? "") === "Finalizada" || updateStatus.isPending}
+                              disabled={(o.status ?? "") === "Finalizada" || (o.status ?? "") === "Cancelada" || updateStatus.isPending}
                             >
                               <SelectTrigger className="h-8 w-[160px]">
                                 <SelectValue />
@@ -266,17 +390,57 @@ export default function Producao() {
                           </div>
                         </TableCell>
                         <TableCell className="text-right">
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            className="gap-2"
-                            onClick={() => finalizeMO.mutate(o)}
-                            disabled={finalizeMO.isPending || (o.status ?? "") === "Finalizada"}
-                          >
-                            <CheckCircle2 className="h-4 w-4" />
-                            Finalizar
-                          </Button>
+                          <div className="inline-flex items-center gap-2">
+                            <Button type="button" variant="outline" size="icon" aria-label="Editar" onClick={() => openEditDialog(o)}>
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button type="button" variant="outline" size="icon" aria-label="Excluir">
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Excluir ordem?</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Esta ação não pode ser desfeita. Se houver vínculos, a exclusão poderá ser bloqueada.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                  <AlertDialogAction onClick={() => deleteMO.mutate(o.id)} disabled={deleteMO.isPending}>
+                                    Excluir
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="gap-2"
+                              onClick={() => finalizeMO.mutate(o)}
+                              disabled={finalizeMO.isPending || (o.status ?? "") === "Finalizada" || (o.status ?? "") === "Cancelada"}
+                            >
+                              <CheckCircle2 className="h-4 w-4" />
+                              Finalizar
+                            </Button>
+
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="gap-2"
+                              onClick={() => cancelMO.mutate(o)}
+                              disabled={cancelMO.isPending || (o.status ?? "") === "Cancelada"}
+                            >
+                              <XCircle className="h-4 w-4" />
+                              Cancelar
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))}
