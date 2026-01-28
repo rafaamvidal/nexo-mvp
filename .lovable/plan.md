@@ -1,122 +1,99 @@
 
 Objetivo
-- Evitar conflito de cadastro quando o usuário tenta cadastrar um produto que já existe:
-  - Se já existir Ativo com mesmo nome: bloquear e mostrar “Produto já cadastrado.”
-  - Se já existir Inativo com mesmo nome: não criar novo; oferecer “Reativar e recuperar histórico”; ao confirmar, reativar e atualizar os campos com o que foi digitado (incluindo estoque, conforme sua decisão).
-- Opcional: adicionar botão “Reativar” na listagem quando “Mostrar inativos” estiver ligado.
+- Atualizar a identidade oficial do sistema para “Nexo ERP”.
+- Ajustar título/meta tags do HTML para “Nexo ERP | Gestão Inteligente”.
+- Trocar textos genéricos/antigos por “Nexo ERP”.
+- Substituir o texto do “cabeçalho” por logotipo (Sidebar e Login) usando a imagem fornecida.
+- Manter o Design System (paleta Esmeralda/Slate + glassmorphism) intacto e garantir boa legibilidade do logo em fundos claros/escuros.
 
-Contexto do código atual (o que encontrei)
-- A tela `src/pages/Produtos.tsx` usa o componente `ProductFormSheet` para “Cadastrar produto” e “Editar”.
-- A criação/edição de produto acontece dentro de `src/components/inventory/ProductFormSheet.tsx` via `upsertMutation`:
-  - Se `product` existe: `update`
-  - Se `product` não existe: `insert`
-- Portanto, a lógica “Verificar antes de Criar” precisa ser implementada no `ProductFormSheet` (não apenas em `Produtos.tsx`), pois é ali que o insert acontece.
+Contexto encontrado no código (pontos exatos a alterar)
+- `index.html`
+  - `<title>Lovable App</title>`
+  - `<meta name="description" content="Lovable Generated Project" />`
+  - `<meta name="author" content="Lovable" />`
+  - `og:title`, `og:description`, `twitter:*` ainda com “Lovable”.
+- `src/components/layout/AppSidebar.tsx`
+  - Texto atual no label: “ERP Estoque”.
+- `src/pages/Auth.tsx`
+  - Título atual: “ERP • Estoque”.
+  - Subtítulo “Acesse para gerenciar produtos e movimentações.” (ok, mas podemos ajustar para remover a marca antiga e padronizar com Nexo ERP).
 
-Decisões confirmadas por você (usadas no desenho)
-- Chave de duplicidade: “Apenas Nome”
-- Reativação e estoque: “Usar estoque do formulário” (ou seja: na reativação, vamos atualizar `current_stock` com o valor digitado)
+Implementação (passo a passo)
 
-Escopo de implementação
+1) Atualização textual (meta e títulos)
+Arquivo: `index.html`
+- Alterar:
+  - `<title>` para: `Nexo ERP | Gestão Inteligente`
+  - `meta name="description"` para: `Nexo ERP | Gestão Inteligente`
+  - `meta name="author"` para: `Nexo ERP`
+  - `meta property="og:title"` para: `Nexo ERP | Gestão Inteligente`
+  - `meta property="og:description"` para: `Nexo ERP | Gestão Inteligente`
+- Opcional (recomendado para consistência de brand):
+  - Atualizar `twitter:site` (hoje está `@Lovable`) para remover branding do Lovable (ou remover a tag se não houver @ oficial).
+  - Atualizar `og:image` / `twitter:image` (hoje é do Lovable) — como você não forneceu um novo “opengraph image”, vou planejar deixar como está por enquanto, mas marcar como próximo passo sugerido (para não publicar com imagem da Lovable em compartilhamentos).
 
-1) Verificar antes de criar (no ProductFormSheet)
-Arquivo: `src/components/inventory/ProductFormSheet.tsx`
+Observação técnica:
+- Isso cobre o “Browser Title” e “tags <meta>” de forma estática (SPA). Não vamos adicionar bibliotecas extras (ex.: react-helmet) para não aumentar complexidade sem necessidade.
 
-1.1 Normalização do nome
-- Antes de consultar e antes de salvar, normalizar o nome para reduzir falsos negativos por espaços:
-  - `normalized = values.name.trim().replace(/\s+/g, " ")`
-- Observação: o schema já faz `.trim()`, mas vamos reforçar para consulta e comparação.
+2) Implementação do logotipo na Sidebar (substituir texto)
+Arquivo: `src/components/layout/AppSidebar.tsx`
+- Onde hoje existe:
+  - `<span ...>ERP Estoque</span>`
+- Substituir por um `<img>` com a URL informada:
+  - `src="https://lesmncgjcvguyizzjvrw.supabase.co/storage/v1/object/public/branding/nexo_erp_logo.jpg"`
+  - `alt="Nexo ERP"`
+- Ajuste de tamanho:
+  - Largura alvo ~140px no modo expandido.
+  - Tailwind sugerido: `w-[140px] h-auto object-contain`
+- Comportamento quando a sidebar estiver “collapsed”:
+  - Como no modo colapsado o espaço é pequeno, vamos:
+    - ocultar a imagem para não “estourar” layout (`collapsed && "sr-only"` não funciona para imagem do mesmo jeito).
+    - manter acessibilidade: renderizar a imagem com `className={cn("...", collapsed && "hidden")}` e adicionar um `span` com `sr-only` para o texto “Nexo ERP” (ou manter `alt` + `aria-label` no container).
+- Ajustes de contraste/transparência:
+  - Adicionar classes leves para o logo não “sumir” em glass/escuro:
+    - `drop-shadow-sm`
+    - `dark:brightness-110 dark:contrast-110` (só se necessário após ver no preview)
+  - Não mexer nas variáveis de cor do design system.
 
-1.2 Consulta silenciosa no Supabase
-- Somente no cenário de “Novo Produto” (quando `product` não está definido).
-- Executar uma query leve:
-  - `from("products").select("id,name,status").ilike("name", normalized)`
-  - `limit(5)` (por segurança)
-- Como `ilike` aceita padrão, usaremos sem `%` para equivalência case-insensitive exata. Se houver risco de variações de espaços, fazemos a comparação final no client:
-  - filtrar resultados com `normalizeName(row.name) === normalized`.
+3) Implementação do logotipo na Tela de Login (substituir título)
+Arquivo: `src/pages/Auth.tsx`
+- Onde hoje existe o bloco:
+  - `<h1>ERP • Estoque</h1>` e o parágrafo abaixo.
+- Substituir por:
+  - Uma área centralizada com o logo acima do Card, tamanho maior (180–200px):
+    - `<img ... className="mx-auto w-[200px] max-w-full h-auto object-contain" />`
+  - Texto auxiliar pode permanecer (mas sem marca antiga), por exemplo:
+    - “Acesse para gerenciar produtos, estoque e movimentações.”
+- Garantir alinhamento e espaçamento:
+  - Manter `mb-6` (ou ajustar para o logo ficar harmônico com o Card).
+- Garantir legibilidade com transparência:
+  - Mesmas classes de suporte do logo (drop-shadow / dark brightness) aplicadas no login também.
 
-1.3 Cenário A: encontrou Ativo
-- Critério: `(row.status ?? "Ativo") !== "Inativo"`
-- Ação:
-  - Não criar.
-  - Mostrar erro no campo “Nome” usando `react-hook-form`:
-    - `form.setError("name", { type: "validate", message: "Produto já cadastrado." })`
-  - Manter o Sheet aberto.
+4) Substituir nomes genéricos em “rodapés/mensagens de sistema”
+Escopo real encontrado:
+- Não encontrei rodapé específico nem outros textos “Lovable App” no `src/` além de `Auth.tsx` e `AppSidebar.tsx`.
+- Implementação:
+  - Atualizar os textos já identificados.
+  - Rodar uma busca (no momento de implementação) por termos comuns (“Lovable”, “ERP Estoque”, “ERP • Estoque”) para garantir que não ficou nenhum ponto restante em páginas como Dashboard/NotFound e componentes.
 
-1.4 Cenário B: encontrou Inativo (solução)
-- Critério: `(row.status ?? "Ativo") === "Inativo"`
-- Ação:
-  - Não criar.
-  - Abrir um `AlertDialog` controlado (novo estado local no `ProductFormSheet`) com texto:
-    - “Encontramos um produto ‘{nome}’ inativo no sistema. Deseja reativá-lo e recuperar seu histórico?”
-  - Guardar em estado:
-    - `reactivateCandidateId` (id encontrado)
-    - `pendingValues` (valores atuais do formulário que o usuário tentou salvar)
-
-1.5 Confirmou reativação
-- Criar uma mutation dedicada (ou reutilizar `upsertMutation` com um modo “reactivate”, mas prefiro separado para legibilidade):
-  - `reactivateMutation`:
-    - `update products set status='Ativo', ...camposDoFormulario... where id = reactivateCandidateId`
-- Campos atualizados na reativação (conforme seu pedido + consistência do cadastro):
-  - `status: "Ativo"`
-  - `name`, `type`, `category`, `unit`, `min_stock`, `price_cost`, `price_sale`, `current_stock`
-- Sucesso:
-  - Toast: “Produto reativado com sucesso!”
-  - Invalidar `["products"]`
-  - Fechar AlertDialog e Sheet
-  - Reset do form
-
-1.6 Cancelou reativação
-- Apenas fecha o AlertDialog e mantém o formulário aberto para o usuário ajustar (sem criar nada).
-
-1.7 Tratamento de concorrência (edge case)
-- Se por alguma razão, no momento da reativação o update falhar (ex.: RLS, rede), mostrar toast com `e.message`.
-- Se existirem múltiplos produtos inativos com o mesmo nome (não deveria, mas pode ocorrer):
-  - Vamos escolher o primeiro match (ordenar por `created_at desc` se necessário; hoje o select não traz `created_at`, então ou incluímos ou aceitamos o primeiro retornado).
-  - Opcional futuro: apresentar lista de candidatos para escolher. Não faremos agora para manter simples.
-
-2) Refinamento visual opcional: botão “Reativar” na listagem
-Arquivo: `src/pages/Produtos.tsx`
-
-2.1 UI
-- Quando `showInactive` estiver ligado e a linha estiver `inactive === true`:
-  - Exibir um botão de ação “Reativar” ao lado de Editar/Excluir/Ajuste Rápido.
-  - Ícone sugerido: `RotateCcw` ou `RefreshCw` (lucide-react).
-
-2.2 Comportamento
-- `reactivateMutation` (novo no `Produtos.tsx`):
-  - `update products set status='Ativo' where id = ...`
-  - (Opcional: não mexer em outros campos aqui; é uma reativação simples)
-- Sucesso:
-  - Toast: “Produto reativado”
-  - Invalidar `["products"]`
-- Observação de UX:
-  - Quando reativar, como a lista por padrão esconde inativos, se `showInactive` estiver false o item já voltará a aparecer normalmente. Se `showInactive` estiver true, ele seguirá visível, mas sem badge “Inativo”.
+Checklist de validação (end-to-end)
+- Abrir a aplicação e confirmar no navegador:
+  - Título da aba: “Nexo ERP | Gestão Inteligente”
+  - Meta tags atualizadas (via DevTools > Elements > head).
+- Sidebar:
+  - Logo aparece com largura ~140px, bem alinhado no glass-sidebar.
+  - Sidebar colapsada não quebra layout (logo não “vaza”).
+- Login:
+  - Logo aparece centralizado acima do Card, com ~180–200px, sem distorção.
+  - Em Dark Mode, logo continua legível.
+- Regressão visual:
+  - Paleta Esmeralda/Slate e glassmorphism permanecem iguais.
 
 Arquivos que serão alterados
-- `src/components/inventory/ProductFormSheet.tsx`
-  - Implementar verificação antes de criar
-  - Implementar AlertDialog de reativação
-  - Implementar `reactivateMutation`
-- `src/pages/Produtos.tsx` (opcional, conforme seu item 2)
-  - Adicionar botão “Reativar” quando estiver exibindo inativos
-  - Adicionar mutation de reativação simples
+- `index.html`
+- `src/components/layout/AppSidebar.tsx`
+- `src/pages/Auth.tsx`
 
-Sem alterações no banco
-- Não vamos criar constraint unique agora.
-- A solução é toda no fluxo do app (como você solicitou).
-
-Roteiro de teste end-to-end (para você validar)
-1) Com “Mostrar inativos” ligado, inative um produto qualquer (ex.: “Açúcar”).
-2) Tente cadastrar um novo produto com o mesmo nome “Açúcar”:
-   - Deve abrir o AlertDialog perguntando se deseja reativar.
-3) Confirme:
-   - Deve reativar o produto existente (mesmo ID), atualizar campos (incluindo estoque), e mostrar toast “Produto reativado com sucesso!”.
-4) Agora tente cadastrar novamente “Açúcar” (com ele Ativo):
-   - Deve dar erro no campo “Nome”: “Produto já cadastrado.”
-5) (Opcional) Com “Mostrar inativos” ligado, clique “Reativar” direto na linha:
-   - Deve voltar para Ativo e atualizar a listagem.
-
-Notas técnicas (para evitar bugs comuns)
-- Usar `form.setError` para o erro “Produto já cadastrado” garante que o feedback fica no campo como você pediu.
-- Não usar `.single()` na consulta de verificação, porque pode não haver resultado (melhor trabalhar com array).
-- Garantir que a verificação só roda no fluxo “novo produto” para não atrapalhar edição.
+Riscos/observações
+- A URL do logo é externa (Supabase Storage público). Se houver qualquer bloqueio/CORS/404, a imagem não renderiza. Planejo adicionar `loading="eager"` no login (para evitar “flash” vazio) e `loading="lazy"` na sidebar (opcional).
+- As tags `og:image`/`twitter:image` ainda apontam para a imagem padrão da Lovable. Para branding completo em compartilhamento de links, precisaremos de uma imagem OG oficial (próximo passo).
