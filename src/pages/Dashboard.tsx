@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { supabase } from "@/lib/supabaseClient";
+import { supabase } from "@/integrations/supabase/client";
 import type { ProductRow, ProductType } from "@/types/inventory";
 import { MovementDialog } from "@/components/inventory/MovementDialog";
 import { ProductFormSheet } from "@/components/inventory/ProductFormSheet";
