@@ -279,6 +279,44 @@ export type Database = {
           },
         ]
       }
+      stock_movements: {
+        Row: {
+          created_at: string
+          id: string
+          product_id: string
+          quantity: number
+          reason: string | null
+          reference_id: string | null
+          type: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          product_id: string
+          quantity: number
+          reason?: string | null
+          reference_id?: string | null
+          type: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          product_id?: string
+          quantity?: number
+          reason?: string | null
+          reference_id?: string | null
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stock_movements_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       suppliers: {
         Row: {
           address: string | null
@@ -344,6 +382,15 @@ export type Database = {
             }
             Returns: undefined
           }
+      apply_stock_adjustment: {
+        Args: {
+          p_delta: number
+          p_product_id: string
+          p_reason?: string
+          p_reference_id?: string
+        }
+        Returns: undefined
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
