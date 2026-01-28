@@ -3,7 +3,11 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import Index from "./pages/Index";
+import DashboardHome from "./pages/DashboardHome";
+import Estoque from "./pages/Estoque";
+import Produtos from "./pages/Produtos";
+import Vendas from "./pages/Vendas";
+import Financeiro from "./pages/Financeiro";
 import NotFound from "./pages/NotFound";
 import Auth from "./pages/Auth";
 import { AuthProvider } from "@/hooks/useAuth";
@@ -24,7 +28,39 @@ const App = () => (
               path="/"
               element={
                 <RequireAuth>
-                  <Index />
+                  <DashboardHome />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/estoque"
+              element={
+                <RequireAuth>
+                  <Estoque />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/produtos"
+              element={
+                <RequireAuth>
+                  <Produtos />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/vendas"
+              element={
+                <RequireAuth>
+                  <Vendas />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/financeiro"
+              element={
+                <RequireAuth>
+                  <Financeiro />
                 </RequireAuth>
               }
             />
