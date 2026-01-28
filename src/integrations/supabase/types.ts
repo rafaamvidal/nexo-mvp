@@ -72,6 +72,8 @@ export type Database = {
           entity_name: string | null
           id: string
           payment_date: string | null
+          purchase_order_id: string | null
+          sale_id: string | null
           status: string | null
           type: string
         }
@@ -84,6 +86,8 @@ export type Database = {
           entity_name?: string | null
           id?: string
           payment_date?: string | null
+          purchase_order_id?: string | null
+          sale_id?: string | null
           status?: string | null
           type: string
         }
@@ -96,10 +100,27 @@ export type Database = {
           entity_name?: string | null
           id?: string
           payment_date?: string | null
+          purchase_order_id?: string | null
+          sale_id?: string | null
           status?: string | null
           type?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "financial_records_purchase_order_id_fkey"
+            columns: ["purchase_order_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financial_records_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "sales"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       manufacturing_orders: {
         Row: {
