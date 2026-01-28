@@ -14,12 +14,101 @@ export type Database = {
   }
   public: {
     Tables: {
+      clients: {
+        Row: {
+          address: string | null
+          city: string | null
+          created_at: string
+          email: string | null
+          id: string
+          limit_credit: number | null
+          name: string
+          observations: string | null
+          phone: string | null
+          state: string | null
+          status: string | null
+          tax_id: string | null
+          type: string | null
+        }
+        Insert: {
+          address?: string | null
+          city?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          limit_credit?: number | null
+          name: string
+          observations?: string | null
+          phone?: string | null
+          state?: string | null
+          status?: string | null
+          tax_id?: string | null
+          type?: string | null
+        }
+        Update: {
+          address?: string | null
+          city?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          limit_credit?: number | null
+          name?: string
+          observations?: string | null
+          phone?: string | null
+          state?: string | null
+          status?: string | null
+          tax_id?: string | null
+          type?: string | null
+        }
+        Relationships: []
+      }
+      financial_records: {
+        Row: {
+          amount: number
+          category: string | null
+          created_at: string
+          description: string
+          due_date: string
+          entity_name: string | null
+          id: string
+          payment_date: string | null
+          status: string | null
+          type: string
+        }
+        Insert: {
+          amount: number
+          category?: string | null
+          created_at?: string
+          description: string
+          due_date: string
+          entity_name?: string | null
+          id?: string
+          payment_date?: string | null
+          status?: string | null
+          type: string
+        }
+        Update: {
+          amount?: number
+          category?: string | null
+          created_at?: string
+          description?: string
+          due_date?: string
+          entity_name?: string | null
+          id?: string
+          payment_date?: string | null
+          status?: string | null
+          type?: string
+        }
+        Relationships: []
+      }
       movements: {
         Row: {
           date: string
           id: string
           product_id: string
           quantity: number
+          reason: string | null
+          reference_id: string | null
           type: string
         }
         Insert: {
@@ -27,6 +116,8 @@ export type Database = {
           id?: string
           product_id: string
           quantity: number
+          reason?: string | null
+          reference_id?: string | null
           type: string
         }
         Update: {
@@ -34,6 +125,8 @@ export type Database = {
           id?: string
           product_id?: string
           quantity?: number
+          reason?: string | null
+          reference_id?: string | null
           type?: string
         }
         Relationships: [
@@ -48,31 +141,186 @@ export type Database = {
       }
       products: {
         Row: {
+          category: string | null
           created_at: string
           current_stock: number
+          description: string | null
           id: string
           min_stock: number
           name: string
+          price_cost: number | null
+          price_sale: number | null
+          sku: string | null
+          status: string | null
           type: string
           unit: string
+          validity_days: number | null
         }
         Insert: {
+          category?: string | null
           created_at?: string
           current_stock?: number
+          description?: string | null
           id?: string
           min_stock?: number
           name: string
+          price_cost?: number | null
+          price_sale?: number | null
+          sku?: string | null
+          status?: string | null
           type: string
           unit: string
+          validity_days?: number | null
         }
         Update: {
+          category?: string | null
           created_at?: string
           current_stock?: number
+          description?: string | null
           id?: string
           min_stock?: number
           name?: string
+          price_cost?: number | null
+          price_sale?: number | null
+          sku?: string | null
+          status?: string | null
           type?: string
           unit?: string
+          validity_days?: number | null
+        }
+        Relationships: []
+      }
+      sale_items: {
+        Row: {
+          id: string
+          product_id: string | null
+          quantity: number
+          sale_id: string | null
+          total: number
+          unit_price: number
+        }
+        Insert: {
+          id?: string
+          product_id?: string | null
+          quantity: number
+          sale_id?: string | null
+          total: number
+          unit_price: number
+        }
+        Update: {
+          id?: string
+          product_id?: string | null
+          quantity?: number
+          sale_id?: string | null
+          total?: number
+          unit_price?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sale_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sale_items_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "sales"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sales: {
+        Row: {
+          client_id: string | null
+          code: string | null
+          created_at: string
+          discount_amount: number | null
+          gross_amount: number | null
+          id: string
+          observations: string | null
+          payment_method: string | null
+          status: string | null
+          total_amount: number | null
+        }
+        Insert: {
+          client_id?: string | null
+          code?: string | null
+          created_at?: string
+          discount_amount?: number | null
+          gross_amount?: number | null
+          id?: string
+          observations?: string | null
+          payment_method?: string | null
+          status?: string | null
+          total_amount?: number | null
+        }
+        Update: {
+          client_id?: string | null
+          code?: string | null
+          created_at?: string
+          discount_amount?: number | null
+          gross_amount?: number | null
+          id?: string
+          observations?: string | null
+          payment_method?: string | null
+          status?: string | null
+          total_amount?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      suppliers: {
+        Row: {
+          address: string | null
+          city: string | null
+          contact_name: string | null
+          created_at: string
+          email: string | null
+          id: string
+          name: string
+          observations: string | null
+          phone: string | null
+          state: string | null
+          status: string | null
+          tax_id: string | null
+        }
+        Insert: {
+          address?: string | null
+          city?: string | null
+          contact_name?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          name: string
+          observations?: string | null
+          phone?: string | null
+          state?: string | null
+          status?: string | null
+          tax_id?: string | null
+        }
+        Update: {
+          address?: string | null
+          city?: string | null
+          contact_name?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          name?: string
+          observations?: string | null
+          phone?: string | null
+          state?: string | null
+          status?: string | null
+          tax_id?: string | null
         }
         Relationships: []
       }
@@ -81,10 +329,21 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      apply_movement: {
-        Args: { p_product_id: string; p_quantity: number; p_type: string }
-        Returns: undefined
-      }
+      apply_movement:
+        | {
+            Args: { p_product_id: string; p_quantity: number; p_type: string }
+            Returns: undefined
+          }
+        | {
+            Args: {
+              p_product_id: string
+              p_quantity: number
+              p_reason?: string
+              p_reference_id?: string
+              p_type: string
+            }
+            Returns: undefined
+          }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
