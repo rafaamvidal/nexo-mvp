@@ -9,9 +9,25 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import type { ProductType } from "@/types/inventory";
+
+function normalizeName(name: string) {
+  return String(name ?? "")
+    .trim()
+    .replace(/\s+/g, " ");
+}
 
 const schema = z.object({
   name: z.string().trim().min(1, "Informe o nome").max(120),
@@ -46,6 +62,9 @@ export function ProductFormSheet({
   trigger?: React.ReactNode;
 }) {
   const [open, setOpen] = React.useState(false);
+  const [reactivateDialogOpen, setReactivateDialogOpen] = React.useState(false);
+  const [reactivateCandidate, setReactivateCandidate] = React.useState<{ id: string; name: string } | null>(null);
+  const [pendingValues, setPendingValues] = React.useState<FormValues | null>(null);
   const qc = useQueryClient();
 
   const form = useForm<FormValues>({
@@ -64,6 +83,10 @@ export function ProductFormSheet({
 
   React.useEffect(() => {
     if (!open) return;
+    // ao abrir um novo cadastro, limpar estados de reativação
+    setReactivateDialogOpen(false);
+    setReactivateCandidate(null);
+    setPendingValues(null);
     if (!product) {
       form.reset({
         name: "",
@@ -90,10 +113,39 @@ export function ProductFormSheet({
     });
   }, [open, product, form]);
 
+  const reactivateMutation = useMutation({
+    mutationFn: async ({ id, values }: { id: string; values: FormValues }) => {
+      const payload = {
+        status: "Ativo",
+        name: normalizeName(values.name),
+        type: values.type as ProductType,
+        category: (values.category ?? "").trim() || null,
+        unit: values.unit,
+        current_stock: values.current_stock,
+        min_stock: values.min_stock,
+        price_cost: values.price_cost ?? null,
+        price_sale: values.price_sale ?? null,
+      };
+
+      const { error } = await supabase.from("products").update(payload).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: async () => {
+      toast.success("Produto reativado com sucesso!");
+      await qc.invalidateQueries({ queryKey: ["products"] });
+      form.reset();
+      setReactivateDialogOpen(false);
+      setReactivateCandidate(null);
+      setPendingValues(null);
+      setOpen(false);
+    },
+    onError: (e: any) => toast.error(e?.message ?? "Erro ao reativar"),
+  });
+
   const upsertMutation = useMutation({
     mutationFn: async (values: FormValues) => {
       const payload = {
-        name: values.name,
+        name: normalizeName(values.name),
         type: values.type as ProductType,
         category: (values.category ?? "").trim() || null,
         unit: values.unit,
@@ -119,6 +171,48 @@ export function ProductFormSheet({
     onError: (e: any) => toast.error(e?.message ?? "Erro ao cadastrar"),
   });
 
+  const onSubmit = form.handleSubmit(async (values) => {
+    // Edição não deve disparar verificação de duplicidade
+    if (product) {
+      upsertMutation.mutate(values);
+      return;
+    }
+
+    const normalized = normalizeName(values.name);
+    // reforçar normalização no form para não “salvar diferente” do que verificou
+    if (normalized !== values.name) form.setValue("name", normalized, { shouldDirty: true });
+
+    const { data, error } = await supabase
+      .from("products")
+      .select("id,name,status,created_at")
+      .ilike("name", normalized)
+      .order("created_at", { ascending: false })
+      .limit(5);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+
+    const matches = (data ?? []).filter((row) => normalizeName(row.name) === normalized);
+    const match = matches[0];
+
+    if (match) {
+      const status = (match.status ?? "Ativo") as string;
+      if (status !== "Inativo") {
+        form.setError("name", { type: "validate", message: "Produto já cadastrado." });
+        return;
+      }
+
+      // encontrado inativo: oferecer reativação
+      setReactivateCandidate({ id: match.id, name: match.name });
+      setPendingValues(values);
+      setReactivateDialogOpen(true);
+      return;
+    }
+
+    upsertMutation.mutate(values);
+  });
+
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>
@@ -135,7 +229,7 @@ export function ProductFormSheet({
 
         <form
           className="mt-6 grid gap-4"
-          onSubmit={form.handleSubmit((values) => upsertMutation.mutate(values))}
+          onSubmit={onSubmit}
         >
           <div className="grid gap-2">
             <Label htmlFor="name">Nome</Label>
@@ -198,6 +292,36 @@ export function ProductFormSheet({
           </div>
         </form>
       </SheetContent>
+
+      <AlertDialog open={reactivateDialogOpen} onOpenChange={setReactivateDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reativar produto?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Encontramos um produto “<span className="font-semibold">{reactivateCandidate?.name}</span>” inativo no sistema.
+              Deseja reativá-lo e recuperar seu histórico?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              onClick={() => {
+                setReactivateDialogOpen(false);
+              }}
+            >
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (!reactivateCandidate || !pendingValues) return;
+                reactivateMutation.mutate({ id: reactivateCandidate.id, values: pendingValues });
+              }}
+              disabled={reactivateMutation.isPending}
+            >
+              Reativar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Sheet>
   );
 }

@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Package, Pencil, Search, Trash2, TrendingUp } from "lucide-react";
+import { AlertTriangle, Package, Pencil, RefreshCw, Search, Trash2, TrendingUp } from "lucide-react";
 
 import { AppShell } from "@/components/layout/AppShell";
 import { Badge } from "@/components/ui/badge";
@@ -138,6 +138,20 @@ export default function Produtos() {
     },
     onError: (e: any) => {
       toast.error(e?.message ?? "Erro ao inativar");
+    },
+  });
+
+  const reactivateMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("products").update({ status: "Ativo" }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: async () => {
+      toast.success("Produto reativado");
+      await qc.invalidateQueries({ queryKey: ["products"] });
+    },
+    onError: (e: any) => {
+      toast.error(e?.message ?? "Erro ao reativar");
     },
   });
 
@@ -301,6 +315,18 @@ export default function Produtos() {
                                   </Button>
                                 }
                               />
+                              {showInactive && inactive && (
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="icon"
+                                  aria-label="Reativar"
+                                  onClick={() => reactivateMutation.mutate(p.id)}
+                                  disabled={reactivateMutation.isPending}
+                                >
+                                  <RefreshCw className="h-4 w-4" />
+                                </Button>
+                              )}
                               <AlertDialog>
                                 <AlertDialogTrigger asChild>
                                   <Button type="button" variant="outline" size="icon" aria-label="Excluir">
