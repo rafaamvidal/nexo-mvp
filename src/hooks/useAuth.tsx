@@ -17,6 +17,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = React.useState(true);
 
   React.useEffect(() => {
+    // Avoid infinite blank screen if something unexpected happens in auth initialization.
+    const fallback = window.setTimeout(() => setLoading(false), 2500);
+
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, nextSession) => {
@@ -25,13 +28,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(false);
     });
 
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-      setUser(data.session?.user ?? null);
-      setLoading(false);
-    });
+    supabase.auth
+      .getSession()
+      .then(({ data, error }) => {
+        if (error) {
+          // eslint-disable-next-line no-console
+          console.error("supabase.auth.getSession error", error);
+        }
+        setSession(data.session);
+        setUser(data.session?.user ?? null);
+        setLoading(false);
+      })
+      .catch((e) => {
+        // eslint-disable-next-line no-console
+        console.error("supabase.auth.getSession threw", e);
+        setLoading(false);
+      });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      window.clearTimeout(fallback);
+      subscription.unsubscribe();
+    };
   }, []);
 
   const signOut = React.useCallback(async () => {
