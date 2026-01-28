@@ -12,6 +12,9 @@ import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 
+const LOGO_URL =
+  "https://lesmncgjcvguyizzjvrw.supabase.co/storage/v1/object/public/branding/nexo_erp_logo.jpg";
+
 const schema = z.object({
   email: z.string().trim().email("E-mail inválido").max(255),
   password: z.string().min(6, "Senha muito curta").max(72),
@@ -53,8 +56,16 @@ export default function Auth() {
     <div className="min-h-svh px-4 py-10">
       <div className="mx-auto w-full max-w-md">
         <div className="mb-6">
-          <h1 className="text-balance text-3xl font-extrabold">ERP • Estoque</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Acesse para gerenciar produtos e movimentações.</p>
+          <h1 className="sr-only">Nexo ERP</h1>
+          <img
+            src={LOGO_URL}
+            alt="Nexo ERP"
+            loading="eager"
+            className="mx-auto h-auto w-[200px] max-w-full object-contain drop-shadow-sm dark:brightness-110 dark:contrast-110"
+          />
+          <p className="mt-3 text-center text-sm text-muted-foreground">
+            Acesse para gerenciar produtos, estoque e movimentações.
+          </p>
         </div>
 
         <Card className="glass border-border/60 shadow-elevated">
