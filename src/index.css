@@ -41,6 +41,12 @@ All colors MUST be HSL.
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 40% 98%;
 
+    /* Semantic status colors */
+    --success: 160 84% 39%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 222 47% 11%;
+
     --border: 214 26% 90%;
     --input: 214 26% 90%;
     --ring: 160 84% 39%;
@@ -93,6 +99,12 @@ All colors MUST be HSL.
 
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 210 40% 98%;
+
+    /* Semantic status colors */
+    --success: 160 72% 42%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 210 20% 98%;
 
     --border: 222 20% 18%;
     --input: 222 20% 18%;
