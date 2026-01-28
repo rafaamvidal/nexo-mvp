@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Package, Trash2, TrendingUp } from "lucide-react";
+import { AlertTriangle, Package, Pencil, Search, Trash2, TrendingUp } from "lucide-react";
 
 import { AppShell } from "@/components/layout/AppShell";
 import { Badge } from "@/components/ui/badge";
@@ -12,6 +12,8 @@ import type { ProductRow, ProductType } from "@/types/inventory";
 import { ProductFormSheet, type EditableProduct } from "@/components/inventory/ProductFormSheet";
 import { StockQuickAdjust } from "@/components/inventory/StockQuickAdjust";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Input } from "@/components/ui/input";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -73,13 +75,16 @@ function FilterChips({ value, onChange }: { value: Filter; onChange: (v: Filter)
 export default function Produtos() {
   const qc = useQueryClient();
   const [filter, setFilter] = React.useState<Filter>("Todos");
+  const [q, setQ] = React.useState("");
   const { data, isLoading, error } = useQuery({ queryKey: ["products"], queryFn: fetchProducts });
 
   const products = React.useMemo(() => {
-    if (!data) return [];
-    if (filter === "Todos") return data;
-    return data.filter((p) => p.type === filter);
-  }, [data, filter]);
+    const list = data ?? [];
+    const term = q.trim().toLowerCase();
+    const byType = filter === "Todos" ? list : list.filter((p) => p.type === filter);
+    if (!term) return byType;
+    return byType.filter((p) => p.name.toLowerCase().includes(term) || (p.category ?? "").toLowerCase().includes(term));
+  }, [data, filter, q]);
 
   const lowStockCount = React.useMemo(
     () => (data ?? []).filter((p) => Number(p.current_stock) < Number(p.min_stock)).length,
@@ -143,7 +148,11 @@ export default function Produtos() {
             </p>
           </div>
 
-          <div className="flex flex-col gap-3 md:items-end">
+          <div className="flex w-full flex-col gap-3 md:w-auto md:items-end">
+            <div className="relative w-full md:w-[360px]">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar produto/categoria…" className="pl-9" />
+            </div>
             <FilterChips value={filter} onChange={setFilter} />
             <ProductFormSheet />
           </div>
@@ -211,79 +220,78 @@ export default function Produtos() {
 
           {!isLoading && !error && products.length > 0 && (
             <Card className="glass overflow-hidden rounded-xl border border-border/60">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Nome</TableHead>
-                    <TableHead>Categoria</TableHead>
-                    <TableHead>Tipo</TableHead>
-                    <TableHead className="text-right">Estoque atual</TableHead>
-                    <TableHead className="text-right">Custo</TableHead>
-                    <TableHead className="text-right">Preço</TableHead>
-                    <TableHead className="text-right">Ações</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {products.map((p) => {
-                    const low = Number(p.current_stock) < Number(p.min_stock);
-                    return (
-                      <TableRow key={p.id} className="odd:bg-muted/20">
-                        <TableCell className="font-semibold">
-                          <div className="flex items-center gap-2">
-                            <span className="truncate">{p.name}</span>
-                            {low && <Badge variant="destructive">Baixo</Badge>}
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">{p.category ?? "—"}</TableCell>
-                        <TableCell>{getTypeBadge(p.type)}</TableCell>
-                        <TableCell className={"text-right font-bold " + (low ? "text-destructive" : "")}>
-                          {p.current_stock}
-                          <span className="ml-2 text-xs font-normal text-muted-foreground">{p.unit}</span>
-                        </TableCell>
-                        <TableCell className="text-right">{formatBRL(Number(p.price_cost ?? 0))}</TableCell>
-                        <TableCell className="text-right">{formatBRL(Number(p.price_sale ?? 0))}</TableCell>
-                        <TableCell className="text-right">
-                          <div className="inline-flex items-center gap-2">
-                            <ProductFormSheet
-                              product={mappedEditable(p)}
-                              trigger={
-                                <Button type="button" variant="outline" size="sm">
-                                  Editar
-                                </Button>
-                              }
-                            />
-                            <AlertDialog>
-                              <AlertDialogTrigger asChild>
-                                <Button type="button" variant="outline" size="sm" aria-label="Excluir">
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </AlertDialogTrigger>
-                              <AlertDialogContent>
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle>Excluir produto?</AlertDialogTitle>
-                                  <AlertDialogDescription>
-                                    Esta ação não pode ser desfeita. O produto será removido do cadastro.
-                                  </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                  <AlertDialogAction
-                                    onClick={() => deleteMutation.mutate(p.id)}
-                                    disabled={deleteMutation.isPending}
-                                  >
-                                    Excluir
-                                  </AlertDialogAction>
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                            </AlertDialog>
-                            <StockQuickAdjust productId={p.id} />
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
+              <ScrollArea className="max-h-[70vh]">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Nome</TableHead>
+                      <TableHead>Categoria</TableHead>
+                      <TableHead>Tipo</TableHead>
+                      <TableHead className="text-right">Estoque atual</TableHead>
+                      <TableHead className="text-right">Custo</TableHead>
+                      <TableHead className="text-right">Preço</TableHead>
+                      <TableHead className="text-right">Ações</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {products.map((p) => {
+                      const low = Number(p.current_stock) < Number(p.min_stock);
+                      return (
+                        <TableRow key={p.id} className="odd:bg-muted/20">
+                          <TableCell className="font-semibold">
+                            <div className="flex items-center gap-2">
+                              <span className="truncate">{p.name}</span>
+                              {low && <Badge variant="destructive">Baixo</Badge>}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-muted-foreground">{p.category ?? "—"}</TableCell>
+                          <TableCell>{getTypeBadge(p.type)}</TableCell>
+                          <TableCell className={"text-right font-bold " + (low ? "text-destructive" : "")}>
+                            {p.current_stock}
+                            <span className="ml-2 text-xs font-normal text-muted-foreground">{p.unit}</span>
+                          </TableCell>
+                          <TableCell className="text-right">{formatBRL(Number(p.price_cost ?? 0))}</TableCell>
+                          <TableCell className="text-right">{formatBRL(Number(p.price_sale ?? 0))}</TableCell>
+                          <TableCell className="text-right">
+                            <div className="inline-flex items-center gap-2">
+                              <ProductFormSheet
+                                product={mappedEditable(p)}
+                                trigger={
+                                  <Button type="button" variant="outline" size="icon" aria-label="Editar">
+                                    <Pencil className="h-4 w-4" />
+                                  </Button>
+                                }
+                              />
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button type="button" variant="outline" size="icon" aria-label="Excluir">
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Excluir produto?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      Esta ação não pode ser desfeita. O produto será removido do cadastro.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                    <AlertDialogAction onClick={() => deleteMutation.mutate(p.id)} disabled={deleteMutation.isPending}>
+                                      Excluir
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                              <StockQuickAdjust productId={p.id} />
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </ScrollArea>
             </Card>
           )}
         </div>
