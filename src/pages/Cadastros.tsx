@@ -14,6 +14,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { isForeignKeyViolation, toastDeleteBlocked } from "@/lib/supabaseErrors";
 
 type ClientRow = { id: string; name: string; tax_id: string | null; phone: string | null; email: string | null };
 type SupplierRow = { id: string; name: string; tax_id: string | null; phone: string | null; email: string | null };
@@ -172,7 +173,10 @@ export default function Cadastros() {
       toast.success("Excluído");
       await qc.invalidateQueries({ queryKey: ["clients"] });
     },
-    onError: (e: any) => toast.error(e?.message ?? "Erro ao excluir"),
+    onError: (e: any) => {
+      if (isForeignKeyViolation(e)) return toastDeleteBlocked("Vendas");
+      toast.error(e?.message ?? "Erro ao excluir");
+    },
   });
 
   const delSupplier = useMutation({
@@ -184,7 +188,10 @@ export default function Cadastros() {
       toast.success("Excluído");
       await qc.invalidateQueries({ queryKey: ["suppliers"] });
     },
-    onError: (e: any) => toast.error(e?.message ?? "Erro ao excluir"),
+    onError: (e: any) => {
+      if (isForeignKeyViolation(e)) return toastDeleteBlocked("Compras");
+      toast.error(e?.message ?? "Erro ao excluir");
+    },
   });
 
   return (

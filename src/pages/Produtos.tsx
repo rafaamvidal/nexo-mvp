@@ -26,6 +26,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
+import { isForeignKeyViolation, toastDeleteBlocked } from "@/lib/supabaseErrors";
 
 type Filter = "Todos" | ProductType;
 
@@ -127,7 +128,10 @@ export default function Produtos() {
       toast.success("Produto excluído");
       await qc.invalidateQueries({ queryKey: ["products"] });
     },
-    onError: (e: any) => toast.error(e?.message ?? "Erro ao excluir"),
+    onError: (e: any) => {
+      if (isForeignKeyViolation(e)) return toastDeleteBlocked("Estoque/Vendas/Compras");
+      toast.error(e?.message ?? "Erro ao excluir");
+    },
   });
 
   return (
