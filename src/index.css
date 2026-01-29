@@ -71,6 +71,9 @@ All colors MUST be HSL.
     --sidebar-border: 214 26% 90%;
 
     --sidebar-ring: 160 84% 39%;
+
+    /* Charts */
+    --chart-indigo: 226 70% 55%;
   }
 
   .dark {
@@ -121,6 +124,9 @@ All colors MUST be HSL.
     --sidebar-accent-foreground: 210 20% 98%;
     --sidebar-border: 222 20% 18%;
     --sidebar-ring: 160 72% 42%;
+
+    /* Charts */
+    --chart-indigo: 226 70% 65%;
   }
 }
 
