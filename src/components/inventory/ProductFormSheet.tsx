@@ -29,6 +29,18 @@ function normalizeName(name: string) {
     .replace(/\s+/g, " ");
 }
 
+const UNIT_OPTIONS = ["un", "kg", "g", "L"] as const;
+
+function normalizeUnit(unit: string) {
+  const u = String(unit ?? "").trim();
+  if (!u) return u;
+  if (u.toLowerCase() === "l") return "L";
+  if (u.toLowerCase() === "kg") return "kg";
+  if (u.toLowerCase() === "g") return "g";
+  if (u.toLowerCase() === "un") return "un";
+  return u;
+}
+
 const schema = z.object({
   name: z.string().trim().min(1, "Informe o nome").max(120),
   type: z.enum(["Matéria-Prima", "Produto Final"]),
@@ -80,6 +92,9 @@ export function ProductFormSheet({
       price_sale: undefined,
     },
   });
+
+  const unitValue = form.watch("unit");
+  const isUnitPreset = React.useMemo(() => UNIT_OPTIONS.includes(unitValue as any), [unitValue]);
 
   React.useEffect(() => {
     if (!open) return;
@@ -172,15 +187,20 @@ export function ProductFormSheet({
   });
 
   const onSubmit = form.handleSubmit(async (values) => {
+    // Normalização de unidade (mantendo compatibilidade com unidades antigas)
+    const normalizedUnit = normalizeUnit(values.unit);
+    const normalizedValues = normalizedUnit !== values.unit ? { ...values, unit: normalizedUnit } : values;
+    if (normalizedUnit !== values.unit) form.setValue("unit", normalizedUnit, { shouldDirty: true });
+
     // Edição não deve disparar verificação de duplicidade
     if (product) {
-      upsertMutation.mutate(values);
+      upsertMutation.mutate(normalizedValues);
       return;
     }
 
-    const normalized = normalizeName(values.name);
+    const normalized = normalizeName(normalizedValues.name);
     // reforçar normalização no form para não “salvar diferente” do que verificou
-    if (normalized !== values.name) form.setValue("name", normalized, { shouldDirty: true });
+    if (normalized !== normalizedValues.name) form.setValue("name", normalized, { shouldDirty: true });
 
     const { data, error } = await supabase
       .from("products")
@@ -205,12 +225,12 @@ export function ProductFormSheet({
 
       // encontrado inativo: oferecer reativação
       setReactivateCandidate({ id: match.id, name: match.name });
-      setPendingValues(values);
+      setPendingValues(normalizedValues);
       setReactivateDialogOpen(true);
       return;
     }
 
-    upsertMutation.mutate(values);
+    upsertMutation.mutate(normalizedValues);
   });
 
   return (
@@ -258,7 +278,28 @@ export function ProductFormSheet({
           <div className="grid grid-cols-2 gap-3">
             <div className="grid gap-2">
               <Label htmlFor="unit">Unidade</Label>
-              <Input id="unit" placeholder="kg / un / l" {...form.register("unit")} />
+              <Select
+                value={isUnitPreset ? unitValue : "__custom__"}
+                onValueChange={(v) => {
+                  if (v === "__custom__") return;
+                  form.setValue("unit", v, { shouldDirty: true });
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione…" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="un">un</SelectItem>
+                  <SelectItem value="kg">kg</SelectItem>
+                  <SelectItem value="g">g</SelectItem>
+                  <SelectItem value="L">L</SelectItem>
+                  {!isUnitPreset && <SelectItem value="__custom__">Outra (manter atual)</SelectItem>}
+                </SelectContent>
+              </Select>
+
+              {!isUnitPreset && (
+                <Input id="unit" placeholder="Digite a unidade" {...form.register("unit")} />
+              )}
             </div>
             <div className="grid gap-2">
               <Label htmlFor="min_stock">Estoque mínimo</Label>
