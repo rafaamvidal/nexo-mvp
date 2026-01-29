@@ -15,6 +15,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { isForeignKeyViolation, toastDeleteBlocked } from "@/lib/supabaseErrors";
+import { StaffTab } from "@/components/staff/StaffTab";
 
 type ClientRow = { id: string; name: string; tax_id: string | null; phone: string | null; email: string | null };
 type SupplierRow = { id: string; name: string; tax_id: string | null; phone: string | null; email: string | null };
@@ -402,16 +403,7 @@ export default function Cadastros() {
               </TabsContent>
 
               <TabsContent value="usuarios" className="mt-4">
-                <Card className="glass p-6">
-                  <p className="text-base font-semibold">Usuários / Staff</p>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    Por enquanto, apenas visualização. Para listar todos os usuários, precisaremos de uma tabela pública (ex: profiles/user_roles) ou Edge Function.
-                  </p>
-                  <div className="mt-4 rounded-xl border border-border/60 bg-card p-4">
-                    <p className="text-sm font-semibold">Usuário atual</p>
-                    <p className="mt-1 text-sm text-muted-foreground">(visível após login)</p>
-                  </div>
-                </Card>
+                <StaffTab />
               </TabsContent>
             </Tabs>
           </Card>
