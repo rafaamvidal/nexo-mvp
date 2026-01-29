@@ -31,7 +31,6 @@ import { toast } from "sonner";
 type AllowlistUserRow = {
   id: string;
   status: string;
-  created_at: string;
   email: string;
   full_name: string | null;
   role: string | null;
@@ -48,7 +47,7 @@ async function fetchAllowlistUsers(): Promise<AllowlistUserRow[]> {
   const { data, error } = await supabase
     .from("user_profiles")
     // role NÃO deve ficar em user_profiles; vem de user_profile_roles
-    .select("id,email,full_name,status,created_at,user_profile_roles(role)")
+    .select("id,email,full_name,status,user_profile_roles(role)")
     .order("email", { ascending: true });
   if (error) throw error;
 
@@ -61,7 +60,6 @@ async function fetchAllowlistUsers(): Promise<AllowlistUserRow[]> {
       email: row.email,
       full_name: row.full_name,
       status: row.status,
-      created_at: row.created_at,
       role,
     } satisfies AllowlistUserRow;
   });
@@ -190,37 +188,32 @@ export function StaffTab() {
         status: payload.status,
       };
 
-      if (payload.id) {
-        // Atualiza allowlist (sem role)
-        const { error: profileError } = await supabase.from("user_profiles").update(profileBase as any).eq("id", payload.id);
-        if (profileError) throw profileError;
-
-        // Atualiza role na tabela dedicada
-        const { error: roleError } = await supabase
-          .from("user_profile_roles")
-          .upsert(
-            {
-              user_profile_id: payload.id,
-              role: payload.role,
-            } as any,
-            { onConflict: "user_profile_id" },
-          );
-        if (roleError) throw roleError;
-        return;
-      }
-
-      // Cria o profile e pega o id
-      const { data: created, error: createError } = await supabase
+      // Passo A: Upsert em user_profiles e obtém o id
+      // Observação: usamos onConflict=email (pressupõe e-mail único/índice único em lower(email)).
+      const { data: profileRow, error: profileError } = await supabase
         .from("user_profiles")
-        .insert(profileBase as any)
+        .upsert(
+          {
+            ...(payload.id ? { id: payload.id } : null),
+            ...profileBase,
+          } as any,
+          { onConflict: "email" },
+        )
         .select("id")
-        .single();
-      if (createError) throw createError;
+        .maybeSingle();
+      if (profileError) throw profileError;
+      if (!profileRow?.id) throw new Error("Não foi possível obter o ID do perfil");
 
-      // Cria o role associado
+      // Passo B: Upsert em user_profile_roles usando a FK correta: user_profile_id
       const { error: roleError } = await supabase
         .from("user_profile_roles")
-        .insert({ user_profile_id: created.id, role: payload.role } as any);
+        .upsert(
+          {
+            user_profile_id: profileRow.id,
+            role: payload.role,
+          } as any,
+          { onConflict: "user_profile_id" },
+        );
       if (roleError) throw roleError;
     },
     onSuccess: async () => {
