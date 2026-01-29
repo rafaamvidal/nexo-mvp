@@ -29,7 +29,7 @@ import {
 import { isForeignKeyViolation, toastDeleteBlocked } from "@/lib/supabaseErrors";
 
 type SupplierRow = { id: string; name: string };
-type ProductRawRow = { id: string; name: string; price_cost: number | null };
+type ProductRawRow = { id: string; name: string; price_cost: number | null; unit: string };
 
 type PurchaseOrderRow = {
   id: string;
@@ -130,7 +130,7 @@ async function fetchSuppliers(): Promise<SupplierRow[]> {
 async function fetchRawMaterials(): Promise<ProductRawRow[]> {
   const { data, error } = await supabase
     .from("products")
-    .select("id,name,price_cost")
+    .select("id,name,price_cost,unit")
     .eq("status", "Ativo")
     .eq("type", "Matéria-Prima")
     .order("name", { ascending: true });
@@ -559,7 +559,10 @@ export default function Compras() {
                   <div className="grid gap-2">
                     <Label>Itens (somente Matéria-prima)</Label>
                     <div className="grid gap-2">
-                      {items.map((it, idx) => (
+                      {items.map((it, idx) => {
+                        const unit = (raws ?? []).find((p) => p.id === it.product_id)?.unit;
+                        const qtyPlaceholder = unit ? `Qtd (${unit})` : "Qtd";
+                        return (
                         <div key={idx} className="grid grid-cols-12 gap-2">
                           <div className="col-span-6">
                             <Select
@@ -599,7 +602,7 @@ export default function Compras() {
                               onChange={(e) =>
                                 setItems((cur) => cur.map((x, i) => (i === idx ? { ...x, quantity: Number(e.target.value) } : x)))
                               }
-                              placeholder="Qtd"
+                              placeholder={qtyPlaceholder}
                             />
                           </div>
                           <div className="col-span-3">
@@ -627,7 +630,8 @@ export default function Compras() {
                             </Button>
                           </div>
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
 
                     <div className="flex items-center justify-between">
@@ -714,7 +718,10 @@ export default function Compras() {
                       <Label>Itens</Label>
                       {editStatus === "Cancelado" && <p className="text-xs text-muted-foreground">Cancelado: itens travados.</p>}
                       <div className="grid gap-2">
-                        {editItems.map((it, idx) => (
+                        {editItems.map((it, idx) => {
+                          const unit = (raws ?? []).find((p) => p.id === it.product_id)?.unit;
+                          const qtyPlaceholder = unit ? `Qtd (${unit})` : "Qtd";
+                          return (
                           <div key={idx} className="grid grid-cols-12 gap-2">
                             <div className="col-span-6">
                               <Select
@@ -756,6 +763,7 @@ export default function Compras() {
                                   setEditItems((cur) => cur.map((x, i) => (i === idx ? { ...x, quantity: Number(e.target.value) } : x)))
                                 }
                                 disabled={editStatus === "Cancelado"}
+                                placeholder={qtyPlaceholder}
                               />
                             </div>
                             <div className="col-span-3">
@@ -783,7 +791,8 @@ export default function Compras() {
                               </Button>
                             </div>
                           </div>
-                        ))}
+                          );
+                        })}
                       </div>
 
                       <div className="flex items-center justify-between">

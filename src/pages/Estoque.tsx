@@ -23,6 +23,7 @@ async function fetchProductsLite(): Promise<ProductLite[]> {
   const { data, error } = await supabase
     .from("products")
     .select("id,name,unit,current_stock,min_stock,category")
+    .eq("status", "Ativo")
     .order("name", { ascending: true });
   if (error) throw error;
   return (data ?? []) as any;
