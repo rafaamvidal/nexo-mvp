@@ -252,6 +252,30 @@ export type Database = {
         }
         Relationships: []
       }
+      profiles: {
+        Row: {
+          created_at: string
+          email: string
+          id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          id: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       purchase_items: {
         Row: {
           id: string
@@ -427,6 +451,36 @@ export type Database = {
           },
         ]
       }
+      staff_invitations: {
+        Row: {
+          accepted_at: string | null
+          created_at: string
+          created_by: string | null
+          email: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          status: string
+        }
+        Insert: {
+          accepted_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          email: string
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          status?: string
+        }
+        Update: {
+          accepted_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          email?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          status?: string
+        }
+        Relationships: []
+      }
       stock_movements: {
         Row: {
           created_at: string
@@ -510,11 +564,33 @@ export type Database = {
         }
         Relationships: []
       }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
+      accept_staff_invitation: { Args: never; Returns: undefined }
       apply_movement:
         | {
             Args: { p_product_id: string; p_quantity: number; p_type: string }
@@ -548,7 +624,7 @@ export type Database = {
       }
     }
     Enums: {
-      app_role: "admin" | "staff"
+      app_role: "admin" | "staff" | "estoque" | "vendas" | "financeiro"
       item_type: "raw_material" | "finished_product"
       item_unit: "kg" | "lt" | "un" | "m"
       production_status: "draft" | "confirmed" | "canceled"
@@ -685,7 +761,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["admin", "staff"],
+      app_role: ["admin", "staff", "estoque", "vendas", "financeiro"],
       item_type: ["raw_material", "finished_product"],
       item_unit: ["kg", "lt", "un", "m"],
       production_status: ["draft", "confirmed", "canceled"],
