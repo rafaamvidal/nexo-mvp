@@ -1,13 +1,25 @@
 import * as React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
-import { Plus, Trash2 } from "lucide-react";
+import { Pencil, Plus, Trash2, Users } from "lucide-react";
 
 import { useAuth } from "@/hooks/useAuth";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
 import { supabase } from "@/integrations/supabase/client";
+import { isForeignKeyViolation, toastDeleteBlocked } from "@/lib/supabaseErrors";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,121 +28,129 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
 
-type ProfileRow = {
+type AllowlistUserRow = {
   id: string;
-  email: string;
   status: string;
   created_at: string;
-};
-
-type UserRoleRow = {
-  user_id: string;
-  role: string;
-};
-
-type InvitationRow = {
-  id: string;
   email: string;
-  role: string;
-  status: string;
-  created_at: string;
-  accepted_at: string | null;
+  full_name: string | null;
+  role: string | null;
 };
 
-const inviteSchema = z.object({
+const userProfileSchema = z.object({
+  full_name: z.string().trim().max(120).optional().or(z.literal("")),
   email: z.string().trim().email("E-mail inválido").max(255),
-  role: z.enum(["admin", "staff", "estoque", "vendas", "financeiro"]),
+  role: z.enum(["admin", "estoque", "vendas", "financeiro", "rh"]),
+  status: z.enum(["active", "inactive"]),
 });
 
-async function fetchProfiles(): Promise<ProfileRow[]> {
-  const { data, error } = await supabase.from("profiles").select("id,email,status,created_at").order("email", { ascending: true });
-  if (error) throw error;
-  return (data ?? []) as any;
-}
-
-async function fetchRoles(): Promise<UserRoleRow[]> {
-  const { data, error } = await supabase.from("user_roles").select("user_id,role");
-  if (error) throw error;
-  return (data ?? []) as any;
-}
-
-async function fetchInvites(): Promise<InvitationRow[]> {
+async function fetchAllowlistUsers(): Promise<AllowlistUserRow[]> {
   const { data, error } = await supabase
-    .from("staff_invitations")
-    .select("id,email,role,status,created_at,accepted_at")
-    .order("created_at", { ascending: false });
+    .from("user_profiles")
+    .select("id,email,full_name,role,status,created_at")
+    .order("email", { ascending: true });
   if (error) throw error;
   return (data ?? []) as any;
 }
 
-function InviteDialog({ onCreated }: { onCreated: () => Promise<void> }) {
-  const { user } = useAuth();
+function UserProfileDialog({
+  trigger,
+  title,
+  initial,
+  onSave,
+}: {
+  trigger: React.ReactNode;
+  title: string;
+  initial?: { full_name: string | null; email: string; role: string | null; status: string | null };
+  onSave: (payload: z.infer<typeof userProfileSchema>) => Promise<void>;
+}) {
   const [open, setOpen] = React.useState(false);
-  const [email, setEmail] = React.useState("");
-  const [role, setRole] = React.useState<z.infer<typeof inviteSchema>["role"]>("staff");
+  const [fullName, setFullName] = React.useState(initial?.full_name ?? "");
+  const [email, setEmail] = React.useState(initial?.email ?? "");
+  const [role, setRole] = React.useState<z.infer<typeof userProfileSchema>["role"]>(
+    (initial?.role as any) ?? "estoque",
+  );
+  const [status, setStatus] = React.useState<z.infer<typeof userProfileSchema>["status"]>(
+    (initial?.status as any) ?? "active",
+  );
 
-  const createInvite = useMutation({
-    mutationFn: async () => {
-      const parsed = inviteSchema.safeParse({ email, role });
-      if (!parsed.success) throw new Error(parsed.error.issues[0]?.message ?? "Dados inválidos");
-
-      const normalizedEmail = parsed.data.email.toLowerCase();
-      const { error } = await supabase.from("staff_invitations").insert({
-        email: normalizedEmail,
-        role: parsed.data.role as any,
-        status: "Pendente",
-        created_by: user?.id ?? null,
-      } as any);
-      if (error) throw error;
-    },
-    onSuccess: async () => {
-      toast.success("Convite criado");
-      setOpen(false);
-      setEmail("");
-      setRole("staff");
-      await onCreated();
-    },
-    onError: (e: any) => toast.error(e?.message ?? "Erro ao criar convite"),
-  });
+  React.useEffect(() => {
+    if (!open) return;
+    setFullName(initial?.full_name ?? "");
+    setEmail(initial?.email ?? "");
+    setRole((initial?.role as any) ?? "estoque");
+    setStatus((initial?.status as any) ?? "active");
+  }, [open, initial?.email, initial?.full_name, initial?.role, initial?.status]);
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button type="button" variant="hero" className="gap-2">
-          <Plus className="h-4 w-4" />
-          Novo
-        </Button>
-      </DialogTrigger>
+      <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Novo convite</DialogTitle>
+          <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
         <div className="grid gap-4">
+          <div className="grid gap-2">
+            <Label>Nome Completo</Label>
+            <Input value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Ex: Maria Silva" />
+          </div>
           <div className="grid gap-2">
             <Label>E-mail</Label>
             <Input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="ex: usuario@empresa.com" />
           </div>
           <div className="grid gap-2">
-            <Label>Cargo</Label>
+            <Label>Cargo/Perfil</Label>
             <Select value={role} onValueChange={(v) => setRole(v as any)}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="staff">Staff</SelectItem>
                 <SelectItem value="estoque">Estoque</SelectItem>
                 <SelectItem value="vendas">Vendas</SelectItem>
                 <SelectItem value="financeiro">Financeiro</SelectItem>
                 <SelectItem value="admin">Admin</SelectItem>
+                <SelectItem value="rh">RH</SelectItem>
               </SelectContent>
             </Select>
           </div>
-          <Button type="button" variant="hero" onClick={() => createInvite.mutate()} disabled={createInvite.isPending}>
-            {createInvite.isPending ? "Salvando…" : "Salvar convite"}
+          <div className="grid gap-2">
+            <Label>Status</Label>
+            <Select value={status} onValueChange={(v) => setStatus(v as any)}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="active">Ativo</SelectItem>
+                <SelectItem value="inactive">Inativo</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <Button
+            type="button"
+            variant="hero"
+            onClick={async () => {
+              try {
+                const parsed = userProfileSchema.safeParse({
+                  full_name: fullName,
+                  email,
+                  role,
+                  status,
+                });
+                if (!parsed.success) throw new Error(parsed.error.issues[0]?.message ?? "Dados inválidos");
+
+                await onSave({
+                  ...parsed.data,
+                  email: parsed.data.email.toLowerCase(),
+                });
+                setOpen(false);
+              } catch (e: any) {
+                toast.error(e?.message ?? "Erro ao salvar");
+              }
+            }}
+          >
+            Salvar
           </Button>
-          <p className="text-xs text-muted-foreground">
-            O usuário aceita automaticamente ao fazer login/cadastro com este e-mail.
-          </p>
         </div>
       </DialogContent>
     </Dialog>
@@ -142,47 +162,51 @@ export function StaffTab() {
   const { user } = useAuth();
   const { data: isAdmin, isLoading: adminLoading } = useIsAdmin();
 
-  const { data: profiles, isLoading: profilesLoading, error: profilesError } = useQuery({
-    queryKey: ["staff", "profiles"],
-    queryFn: fetchProfiles,
+  const { data: allowlistUsers, isLoading: usersLoading, error: usersError } = useQuery({
+    queryKey: ["staff", "user_profiles"],
+    queryFn: fetchAllowlistUsers,
     enabled: !!user && !!isAdmin,
   });
 
-  const { data: roles, isLoading: rolesLoading, error: rolesError } = useQuery({
-    queryKey: ["staff", "roles"],
-    queryFn: fetchRoles,
-    enabled: !!user && !!isAdmin,
-  });
+  const upsertUser = useMutation({
+    mutationFn: async (payload: z.infer<typeof userProfileSchema> & { id?: string }) => {
+      const base = {
+        full_name: payload.full_name?.trim() || null,
+        email: payload.email.trim().toLowerCase(),
+        role: payload.role,
+        status: payload.status,
+      };
 
-  const { data: invites, isLoading: invitesLoading, error: invitesError } = useQuery({
-    queryKey: ["staff", "invites"],
-    queryFn: fetchInvites,
-    enabled: !!user && !!isAdmin,
-  });
+      if (payload.id) {
+        const { error } = await supabase.from("user_profiles").update(base as any).eq("id", payload.id);
+        if (error) throw error;
+        return;
+      }
 
-  const deleteInvite = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from("staff_invitations").delete().eq("id", id);
+      const { error } = await supabase.from("user_profiles").insert(base as any);
       if (error) throw error;
     },
     onSuccess: async () => {
-      toast.success("Convite removido");
-      await qc.invalidateQueries({ queryKey: ["staff", "invites"] });
+      toast.success("Salvo");
+      await qc.invalidateQueries({ queryKey: ["staff", "user_profiles"] });
     },
-    onError: (e: any) => toast.error(e?.message ?? "Erro ao remover convite"),
+    onError: (e: any) => toast.error(e?.message ?? "Erro ao salvar"),
   });
 
-  const roleMap = React.useMemo(() => {
-    const m = new Map<string, string[]>();
-    for (const r of roles ?? []) {
-      const list = m.get(r.user_id) ?? [];
-      list.push(r.role);
-      m.set(r.user_id, list);
-    }
-    // stable order
-    for (const [k, v] of m) m.set(k, [...new Set(v)].sort());
-    return m;
-  }, [roles]);
+  const deleteUser = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("user_profiles").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: async () => {
+      toast.success("Excluído");
+      await qc.invalidateQueries({ queryKey: ["staff", "user_profiles"] });
+    },
+    onError: (e: any) => {
+      if (isForeignKeyViolation(e)) return toastDeleteBlocked("Registros relacionados");
+      toast.error(e?.message ?? "Erro ao excluir");
+    },
+  });
 
   if (!user) {
     return (
@@ -202,7 +226,7 @@ export function StaffTab() {
     );
   }
 
-  // Non-admin view: only current user info (RLS-safe).
+  // Non-admin view: keep restricted.
   if (!isAdmin) {
     return (
       <Card className="glass p-6">
@@ -216,21 +240,29 @@ export function StaffTab() {
     );
   }
 
-  const loading = profilesLoading || rolesLoading || invitesLoading;
-  const error = profilesError || rolesError || invitesError;
+  const loading = usersLoading;
+  const error = usersError;
 
   return (
     <div className="grid gap-4">
       <Card className="glass p-6">
-        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <div>
-            <p className="text-base font-semibold">Usuários / Staff</p>
-            <p className="mt-1 text-sm text-muted-foreground">Gerencie convites e visualize a equipe (admin).</p>
+            <div className="inline-flex items-center gap-2 text-sm font-semibold">
+              <Users className="h-4 w-4 text-muted-foreground" />
+              Usuários / Staff
+            </div>
+            <p className="mt-1 text-sm text-muted-foreground">Cadastro (allowlist) — não cria usuário no Auth.</p>
           </div>
-          <InviteDialog
-            onCreated={async () => {
-              await qc.invalidateQueries({ queryKey: ["staff", "invites"] });
-            }}
+          <UserProfileDialog
+            title="Novo Usuário / Staff"
+            trigger={
+              <Button type="button" variant="hero" className="gap-2">
+                <Plus className="h-4 w-4" />
+                Novo
+              </Button>
+            }
+            onSave={async (payload) => upsertUser.mutateAsync(payload)}
           />
         </div>
       </Card>
@@ -250,84 +282,80 @@ export function StaffTab() {
       )}
 
       {!loading && !error && (
-        <div className="grid gap-4">
-          <Card className="glass overflow-hidden rounded-xl border border-border/60">
-            <div className="border-b border-border/60 px-4 py-3">
-              <p className="text-sm font-semibold">Convites</p>
-              <p className="mt-0.5 text-xs text-muted-foreground">Pendentes e aceitos recentemente.</p>
-            </div>
-            <Table>
-              <TableHeader>
+        <Card className="glass overflow-hidden rounded-xl border border-border/60">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Nome</TableHead>
+                <TableHead>Email</TableHead>
+                <TableHead>Cargo</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="text-right">Ações</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {(allowlistUsers ?? []).length === 0 && (
                 <TableRow>
-                  <TableHead>E-mail</TableHead>
-                  <TableHead>Cargo</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Ações</TableHead>
+                  <TableCell colSpan={5} className="text-sm text-muted-foreground">
+                    Nenhum usuário cadastrado.
+                  </TableCell>
                 </TableRow>
-              </TableHeader>
-              <TableBody>
-                {(invites ?? []).length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={4} className="text-sm text-muted-foreground">
-                      Nenhum convite.
-                    </TableCell>
-                  </TableRow>
-                )}
-                {(invites ?? []).map((inv) => (
-                  <TableRow key={inv.id} className="odd:bg-muted/20">
-                    <TableCell className="font-semibold">{inv.email}</TableCell>
-                    <TableCell className="text-muted-foreground">{inv.role}</TableCell>
-                    <TableCell>{inv.status}</TableCell>
-                    <TableCell className="text-right">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="icon"
-                        aria-label="Remover convite"
-                        onClick={() => deleteInvite.mutate(inv.id)}
-                        disabled={deleteInvite.isPending}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </Card>
+              )}
+              {(allowlistUsers ?? []).map((u) => (
+                <TableRow key={u.id} className="odd:bg-muted/20">
+                  <TableCell className="font-semibold">{u.full_name ?? "—"}</TableCell>
+                  <TableCell className="text-muted-foreground">{u.email}</TableCell>
+                  <TableCell className="text-muted-foreground">{u.role ?? "—"}</TableCell>
+                  <TableCell>{u.status ?? "—"}</TableCell>
+                  <TableCell className="text-right">
+                    <div className="inline-flex items-center gap-2">
+                      <UserProfileDialog
+                        title="Editar Usuário / Staff"
+                        initial={{
+                          email: u.email,
+                          full_name: u.full_name,
+                          role: u.role,
+                          status: u.status,
+                        }}
+                        trigger={
+                          <Button type="button" variant="outline" size="icon" aria-label="Editar">
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                        }
+                        onSave={async (payload) => upsertUser.mutateAsync({ ...payload, id: u.id })}
+                      />
 
-          <Card className="glass overflow-hidden rounded-xl border border-border/60">
-            <div className="border-b border-border/60 px-4 py-3">
-              <p className="text-sm font-semibold">Equipe</p>
-              <p className="mt-0.5 text-xs text-muted-foreground">Usuários com perfil ativo no sistema.</p>
-            </div>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>E-mail</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Cargos</TableHead>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button type="button" variant="outline" size="icon" aria-label="Excluir">
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Excluir cadastro?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Isso remove o registro da allowlist. Não afeta usuários já existentes no Auth.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={() => deleteUser.mutate(u.id)}
+                              disabled={deleteUser.isPending}
+                            >
+                              Excluir
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </div>
+                  </TableCell>
                 </TableRow>
-              </TableHeader>
-              <TableBody>
-                {(profiles ?? []).length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={3} className="text-sm text-muted-foreground">
-                      Nenhum usuário.
-                    </TableCell>
-                  </TableRow>
-                )}
-                {(profiles ?? []).map((p) => (
-                  <TableRow key={p.id} className="odd:bg-muted/20">
-                    <TableCell className="font-semibold">{p.email}</TableCell>
-                    <TableCell>{p.status}</TableCell>
-                    <TableCell className="text-muted-foreground">{(roleMap.get(p.id) ?? []).join(", ") || "—"}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </Card>
-        </div>
+              ))}
+            </TableBody>
+          </Table>
+        </Card>
       )}
     </div>
   );
