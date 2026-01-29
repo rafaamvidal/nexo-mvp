@@ -47,10 +47,24 @@ const userProfileSchema = z.object({
 async function fetchAllowlistUsers(): Promise<AllowlistUserRow[]> {
   const { data, error } = await supabase
     .from("user_profiles")
-    .select("id,email,full_name,role,status,created_at")
+    // role NÃO deve ficar em user_profiles; vem de user_profile_roles
+    .select("id,email,full_name,status,created_at,user_profile_roles(role)")
     .order("email", { ascending: true });
   if (error) throw error;
-  return (data ?? []) as any;
+
+  // PostgREST pode retornar relação 0..n como array; como temos UNIQUE(user_profile_id), normalizamos para 0..1.
+  return (data ?? []).map((row: any) => {
+    const rel = row?.user_profile_roles;
+    const role = Array.isArray(rel) ? rel?.[0]?.role ?? null : rel?.role ?? null;
+    return {
+      id: row.id,
+      email: row.email,
+      full_name: row.full_name,
+      status: row.status,
+      created_at: row.created_at,
+      role,
+    } satisfies AllowlistUserRow;
+  });
 }
 
 function UserProfileDialog({
@@ -170,21 +184,44 @@ export function StaffTab() {
 
   const upsertUser = useMutation({
     mutationFn: async (payload: z.infer<typeof userProfileSchema> & { id?: string }) => {
-      const base = {
+      const profileBase = {
         full_name: payload.full_name?.trim() || null,
         email: payload.email.trim().toLowerCase(),
-        role: payload.role,
         status: payload.status,
       };
 
       if (payload.id) {
-        const { error } = await supabase.from("user_profiles").update(base as any).eq("id", payload.id);
-        if (error) throw error;
+        // Atualiza allowlist (sem role)
+        const { error: profileError } = await supabase.from("user_profiles").update(profileBase as any).eq("id", payload.id);
+        if (profileError) throw profileError;
+
+        // Atualiza role na tabela dedicada
+        const { error: roleError } = await supabase
+          .from("user_profile_roles")
+          .upsert(
+            {
+              user_profile_id: payload.id,
+              role: payload.role,
+            } as any,
+            { onConflict: "user_profile_id" },
+          );
+        if (roleError) throw roleError;
         return;
       }
 
-      const { error } = await supabase.from("user_profiles").insert(base as any);
-      if (error) throw error;
+      // Cria o profile e pega o id
+      const { data: created, error: createError } = await supabase
+        .from("user_profiles")
+        .insert(profileBase as any)
+        .select("id")
+        .single();
+      if (createError) throw createError;
+
+      // Cria o role associado
+      const { error: roleError } = await supabase
+        .from("user_profile_roles")
+        .insert({ user_profile_id: created.id, role: payload.role } as any);
+      if (roleError) throw roleError;
     },
     onSuccess: async () => {
       toast.success("Salvo");
