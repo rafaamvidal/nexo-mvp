@@ -561,7 +561,7 @@ export default function Compras() {
                     <div className="grid gap-2">
                       {items.map((it, idx) => {
                         const unit = (raws ?? []).find((p) => p.id === it.product_id)?.unit;
-                        const qtyPlaceholder = unit ? `Qtd (${unit})` : "Qtd";
+                        const qtyLabel = unit ? `Quantidade (${unit})` : "Quantidade";
                         return (
                         <div key={idx} className="grid grid-cols-12 gap-2">
                           <div className="col-span-6">
@@ -588,13 +588,14 @@ export default function Compras() {
                               <SelectContent>
                                 {(raws ?? []).map((p) => (
                                   <SelectItem key={p.id} value={p.id}>
-                                    {p.name}
+                                    {p.name} <span className="text-muted-foreground">({p.unit})</span>
                                   </SelectItem>
                                 ))}
                               </SelectContent>
                             </Select>
                           </div>
-                          <div className="col-span-2">
+                          <div className="col-span-2 grid gap-1">
+                            <p className="text-xs text-muted-foreground">{qtyLabel}</p>
                             <Input
                               type="number"
                               min={1}
@@ -602,10 +603,10 @@ export default function Compras() {
                               onChange={(e) =>
                                 setItems((cur) => cur.map((x, i) => (i === idx ? { ...x, quantity: Number(e.target.value) } : x)))
                               }
-                              placeholder={qtyPlaceholder}
                             />
                           </div>
-                          <div className="col-span-3">
+                          <div className="col-span-3 grid gap-1">
+                            <p className="text-xs text-muted-foreground">Custo unitário (R$)</p>
                             <Input
                               type="number"
                               min={0}
@@ -614,7 +615,6 @@ export default function Compras() {
                               onChange={(e) =>
                                 setItems((cur) => cur.map((x, i) => (i === idx ? { ...x, unit_cost: Number(e.target.value) } : x)))
                               }
-                              placeholder="Custo"
                             />
                           </div>
                           <div className="col-span-1 flex items-center justify-end">
@@ -720,7 +720,7 @@ export default function Compras() {
                       <div className="grid gap-2">
                         {editItems.map((it, idx) => {
                           const unit = (raws ?? []).find((p) => p.id === it.product_id)?.unit;
-                          const qtyPlaceholder = unit ? `Qtd (${unit})` : "Qtd";
+                          const qtyLabel = unit ? `Quantidade (${unit})` : "Quantidade";
                           return (
                           <div key={idx} className="grid grid-cols-12 gap-2">
                             <div className="col-span-6">
@@ -748,13 +748,14 @@ export default function Compras() {
                                 <SelectContent>
                                   {(raws ?? []).map((p) => (
                                     <SelectItem key={p.id} value={p.id}>
-                                      {p.name}
+                                      {p.name} <span className="text-muted-foreground">({p.unit})</span>
                                     </SelectItem>
                                   ))}
                                 </SelectContent>
                               </Select>
                             </div>
-                            <div className="col-span-2">
+                            <div className="col-span-2 grid gap-1">
+                              <p className="text-xs text-muted-foreground">{qtyLabel}</p>
                               <Input
                                 type="number"
                                 min={1}
@@ -763,10 +764,10 @@ export default function Compras() {
                                   setEditItems((cur) => cur.map((x, i) => (i === idx ? { ...x, quantity: Number(e.target.value) } : x)))
                                 }
                                 disabled={editStatus === "Cancelado"}
-                                placeholder={qtyPlaceholder}
                               />
                             </div>
-                            <div className="col-span-3">
+                            <div className="col-span-3 grid gap-1">
+                              <p className="text-xs text-muted-foreground">Custo unitário (R$)</p>
                               <Input
                                 type="number"
                                 min={0}
