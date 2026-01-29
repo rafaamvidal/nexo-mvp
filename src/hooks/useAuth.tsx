@@ -16,6 +16,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = React.useState<User | null>(null);
   const [loading, setLoading] = React.useState(true);
 
+  const logAuthError = React.useCallback((message: string, err: unknown) => {
+    // Avoid leaking internal details in production builds.
+    if (import.meta.env.DEV) {
+      // eslint-disable-next-line no-console
+      console.error(message, err);
+    }
+  }, []);
+
   React.useEffect(() => {
     // Avoid infinite blank screen if something unexpected happens in auth initialization.
     const fallback = window.setTimeout(() => setLoading(false), 2500);
@@ -32,16 +40,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .getSession()
       .then(({ data, error }) => {
         if (error) {
-          // eslint-disable-next-line no-console
-          console.error("supabase.auth.getSession error", error);
+          logAuthError("supabase.auth.getSession error", error);
         }
         setSession(data.session);
         setUser(data.session?.user ?? null);
         setLoading(false);
       })
       .catch((e) => {
-        // eslint-disable-next-line no-console
-        console.error("supabase.auth.getSession threw", e);
+        logAuthError("supabase.auth.getSession threw", e);
         setLoading(false);
       });
 
