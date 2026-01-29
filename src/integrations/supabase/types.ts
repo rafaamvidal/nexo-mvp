@@ -564,6 +564,36 @@ export type Database = {
         }
         Relationships: []
       }
+      user_profiles: {
+        Row: {
+          created_at: string | null
+          email: string
+          full_name: string | null
+          id: string
+          last_access: string | null
+          role: string | null
+          status: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          email: string
+          full_name?: string | null
+          id?: string
+          last_access?: string | null
+          role?: string | null
+          status?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          email?: string
+          full_name?: string | null
+          id?: string
+          last_access?: string | null
+          role?: string | null
+          status?: string | null
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string
