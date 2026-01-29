@@ -98,7 +98,7 @@ function InviteDialog({ onCreated }: { onCreated: () => Promise<void> }) {
       <DialogTrigger asChild>
         <Button type="button" variant="hero" className="gap-2">
           <Plus className="h-4 w-4" />
-          Convidar
+          Novo
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-lg">
