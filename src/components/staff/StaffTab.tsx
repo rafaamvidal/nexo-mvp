@@ -179,17 +179,31 @@ export function StaffTab() {
         status: payload.status,
       };
 
-      // Upsert direto em user_profiles (sem tabelas auxiliares)
-      const { error } = await supabase
-        .from("user_profiles")
-        .upsert(
-          {
-            ...(payload.id ? { id: payload.id } : null),
-            ...profileBase,
-          } as any,
-          { onConflict: "email" },
-        );
-      if (error) throw error;
+      // Cria o usuário no Auth + grava na allowlist (user_profiles) via Edge Function (service role)
+      if (payload.id) {
+        // Edição: só atualiza a allowlist (não altera Auth)
+        const { error } = await supabase
+          .from("user_profiles")
+          .upsert(
+            {
+              id: payload.id,
+              ...profileBase,
+            } as any,
+            { onConflict: "email" },
+          );
+        if (error) throw error;
+        return;
+      }
+
+      const { data, error } = await supabase.functions.invoke("provision-staff-user", {
+        body: {
+          ...profileBase,
+          password: "Empresa@123",
+        },
+      });
+
+      if (error) throw new Error(error.message);
+      if (!data?.ok) throw new Error(data?.message ?? "Erro ao provisionar usuário");
     },
     onSuccess: async () => {
       toast.success("Salvo");
