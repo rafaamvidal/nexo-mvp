@@ -34,20 +34,24 @@ Deno.serve(async (req) => {
   }
 
   const authHeader = req.headers.get("Authorization") ?? "";
-  if (!authHeader) return json(401, { ok: false, message: "Unauthorized" });
+  if (!authHeader.startsWith("Bearer ")) return json(401, { ok: false, message: "Unauthorized" });
+
+  const token = authHeader.slice("Bearer ".length);
+
+  // With signing-keys, verify_jwt=true can reject valid sessions.
+  // We set verify_jwt=false and validate here using getClaims().
+  const claimsClient = createClient(supabaseUrl, supabaseAnonKey);
+  const { data: claimsData, error: claimsErr } = await claimsClient.auth.getClaims(token);
+  const userId = claimsData?.claims?.sub;
+  if (claimsErr || !userId) return json(401, { ok: false, message: "Unauthorized" });
 
   const userClient = createClient(supabaseUrl, supabaseAnonKey, {
     global: { headers: { Authorization: authHeader } },
   });
 
-  const { data: authData, error: authErr } = await userClient.auth.getUser();
-  if (authErr || !authData?.user?.id) {
-    return json(401, { ok: false, message: "Unauthorized" });
-  }
-
   // Validate admin permission using the existing security-definer function.
   const { data: isAdmin, error: roleErr } = await userClient.rpc("has_role", {
-    _user_id: authData.user.id,
+    _user_id: userId,
     _role: "admin",
   });
   if (roleErr) return json(500, { ok: false, message: roleErr.message });
