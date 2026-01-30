@@ -1,4 +1,4 @@
 project_id = "lesmncgjcvguyizzjvrw"
 
 [functions.provision-staff-user]
-verify_jwt = true
+verify_jwt = false
