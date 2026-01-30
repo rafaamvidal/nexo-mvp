@@ -18,6 +18,7 @@ import NotFound from "./pages/NotFound";
 import Auth from "./pages/Auth";
 import { AuthProvider } from "@/hooks/useAuth";
 import { RequireAuth } from "@/components/auth/RequireAuth";
+import { RequireAdmin } from "@/components/auth/RequireAdmin";
 
 const queryClient = new QueryClient();
 
@@ -97,7 +98,9 @@ const App = () => {
                 path="/relatorios"
                 element={
                   <RequireAuth>
-                    <Relatorios />
+                    <RequireAdmin>
+                      <Relatorios />
+                    </RequireAdmin>
                   </RequireAuth>
                 }
               />
@@ -105,7 +108,9 @@ const App = () => {
                 path="/custos"
                 element={
                   <RequireAuth>
-                    <Custos />
+                    <RequireAdmin>
+                      <Custos />
+                    </RequireAdmin>
                   </RequireAuth>
                 }
               />
