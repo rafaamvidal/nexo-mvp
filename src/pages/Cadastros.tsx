@@ -16,6 +16,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { isForeignKeyViolation, toastDeleteBlocked } from "@/lib/supabaseErrors";
 import { StaffTab } from "@/components/staff/StaffTab";
+import { useIsAdmin } from "@/hooks/useIsAdmin";
 
 type ClientRow = { id: string; name: string; tax_id: string | null; phone: string | null; email: string | null };
 type SupplierRow = { id: string; name: string; tax_id: string | null; phone: string | null; email: string | null };
@@ -111,11 +112,17 @@ function EntityDialog({
 
 export default function Cadastros() {
   const qc = useQueryClient();
+  const { data: isAdmin } = useIsAdmin();
   const { data: clients, isLoading: loadingClients, error: errClients } = useQuery({ queryKey: ["clients"], queryFn: fetchClients });
   const { data: suppliers, isLoading: loadingSuppliers, error: errSuppliers } = useQuery({ queryKey: ["suppliers"], queryFn: fetchSuppliers });
 
   const [tab, setTab] = React.useState("clientes");
   const [q, setQ] = React.useState("");
+
+  React.useEffect(() => {
+    // UI-only permission: staff should not access the Users/Staff tab.
+    if (!isAdmin && tab === "usuarios") setTab("clientes");
+  }, [isAdmin, tab]);
 
   const filteredClients = React.useMemo(() => {
     const term = q.trim().toLowerCase();
@@ -212,10 +219,10 @@ export default function Cadastros() {
         <div className="mt-5">
           <Card className="glass rounded-xl border border-border/60 p-3">
             <Tabs value={tab} onValueChange={setTab}>
-              <TabsList className="grid w-full grid-cols-3">
+              <TabsList className={"grid w-full " + (isAdmin ? "grid-cols-3" : "grid-cols-2")}>
                 <TabsTrigger value="clientes">Clientes</TabsTrigger>
                 <TabsTrigger value="fornecedores">Fornecedores</TabsTrigger>
-                <TabsTrigger value="usuarios">Usuários / Staff</TabsTrigger>
+                {isAdmin && <TabsTrigger value="usuarios">Usuários / Staff</TabsTrigger>}
               </TabsList>
 
               <TabsContent value="clientes" className="mt-4">
@@ -402,9 +409,11 @@ export default function Cadastros() {
                 )}
               </TabsContent>
 
-              <TabsContent value="usuarios" className="mt-4">
-                <StaffTab />
-              </TabsContent>
+              {isAdmin && (
+                <TabsContent value="usuarios" className="mt-4">
+                  <StaffTab />
+                </TabsContent>
+              )}
             </Tabs>
           </Card>
         </div>

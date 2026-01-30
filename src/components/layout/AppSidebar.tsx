@@ -1,6 +1,8 @@
 import { BarChart3, Calculator, Factory, LayoutGrid, Package, ShoppingCart, Truck, Users, Wallet } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 
+import { useIsAdmin } from "@/hooks/useIsAdmin";
+
 import {
   Sidebar,
   SidebarContent,
@@ -36,6 +38,10 @@ export function AppSidebar() {
   const location = useLocation();
   const currentPath = location.pathname;
 
+  const { data: isAdmin } = useIsAdmin();
+
+  const visibleItems = (isAdmin ? items : items.filter((i) => i.url !== "/relatorios" && i.url !== "/custos"));
+
   return (
     <Sidebar variant="floating" collapsible="icon" className="glass-sidebar">
       <SidebarContent>
@@ -54,7 +60,7 @@ export function AppSidebar() {
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {items.map((item) => {
+              {visibleItems.map((item) => {
                 const active = item.url === "/" ? currentPath === "/" : currentPath.startsWith(item.url);
                 return (
                   <SidebarMenuItem key={item.title}>
