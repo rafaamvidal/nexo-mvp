@@ -564,35 +564,6 @@ export type Database = {
         }
         Relationships: []
       }
-      user_profile_roles: {
-        Row: {
-          created_at: string
-          id: string
-          role: Database["public"]["Enums"]["allowlist_role"]
-          user_profile_id: string
-        }
-        Insert: {
-          created_at?: string
-          id?: string
-          role: Database["public"]["Enums"]["allowlist_role"]
-          user_profile_id: string
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          role?: Database["public"]["Enums"]["allowlist_role"]
-          user_profile_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "user_profile_roles_user_profile_id_fkey"
-            columns: ["user_profile_id"]
-            isOneToOne: true
-            referencedRelation: "user_profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       user_profiles: {
         Row: {
           created_at: string | null

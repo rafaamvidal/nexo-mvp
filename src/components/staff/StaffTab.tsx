@@ -6,7 +6,6 @@ import { Pencil, Plus, Trash2, Users } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
 import { supabase } from "@/integrations/supabase/client";
-import { isForeignKeyViolation, toastDeleteBlocked } from "@/lib/supabaseErrors";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
@@ -33,36 +32,30 @@ type AllowlistUserRow = {
   status: string;
   email: string;
   full_name: string | null;
-  role: string | null;
+  role: "admin" | "staff" | null;
 };
 
 const userProfileSchema = z.object({
   full_name: z.string().trim().max(120).optional().or(z.literal("")),
   email: z.string().trim().email("E-mail inválido").max(255),
-  role: z.enum(["admin", "estoque", "vendas", "financeiro", "rh"]),
+  role: z.enum(["admin", "staff"]),
   status: z.enum(["active", "inactive"]),
 });
 
 async function fetchAllowlistUsers(): Promise<AllowlistUserRow[]> {
   const { data, error } = await supabase
     .from("user_profiles")
-    // role NÃO deve ficar em user_profiles; vem de user_profile_roles
-    .select("id,email,full_name,status,user_profile_roles(role)")
+    .select("id,email,full_name,status,role")
     .order("email", { ascending: true });
   if (error) throw error;
 
-  // PostgREST pode retornar relação 0..n como array; como temos UNIQUE(user_profile_id), normalizamos para 0..1.
-  return (data ?? []).map((row: any) => {
-    const rel = row?.user_profile_roles;
-    const role = Array.isArray(rel) ? rel?.[0]?.role ?? null : rel?.role ?? null;
-    return {
-      id: row.id,
-      email: row.email,
-      full_name: row.full_name,
-      status: row.status,
-      role,
-    } satisfies AllowlistUserRow;
-  });
+  return (data ?? []).map((row: any) => ({
+    id: row.id,
+    email: row.email,
+    full_name: row.full_name,
+    status: row.status,
+    role: row.role ?? null,
+  }));
 }
 
 function UserProfileDialog({
@@ -80,7 +73,7 @@ function UserProfileDialog({
   const [fullName, setFullName] = React.useState(initial?.full_name ?? "");
   const [email, setEmail] = React.useState(initial?.email ?? "");
   const [role, setRole] = React.useState<z.infer<typeof userProfileSchema>["role"]>(
-    (initial?.role as any) ?? "estoque",
+    (initial?.role as any) ?? "staff",
   );
   const [status, setStatus] = React.useState<z.infer<typeof userProfileSchema>["status"]>(
     (initial?.status as any) ?? "active",
@@ -90,7 +83,7 @@ function UserProfileDialog({
     if (!open) return;
     setFullName(initial?.full_name ?? "");
     setEmail(initial?.email ?? "");
-    setRole((initial?.role as any) ?? "estoque");
+    setRole((initial?.role as any) ?? "staff");
     setStatus((initial?.status as any) ?? "active");
   }, [open, initial?.email, initial?.full_name, initial?.role, initial?.status]);
 
@@ -117,11 +110,8 @@ function UserProfileDialog({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="estoque">Estoque</SelectItem>
-                <SelectItem value="vendas">Vendas</SelectItem>
-                <SelectItem value="financeiro">Financeiro</SelectItem>
                 <SelectItem value="admin">Admin</SelectItem>
-                <SelectItem value="rh">RH</SelectItem>
+                <SelectItem value="staff">Staff</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -185,12 +175,12 @@ export function StaffTab() {
       const profileBase = {
         full_name: payload.full_name?.trim() || null,
         email: payload.email.trim().toLowerCase(),
+        role: payload.role,
         status: payload.status,
       };
 
-      // Passo A: Upsert em user_profiles e obtém o id
-      // Observação: usamos onConflict=email (pressupõe e-mail único/índice único em lower(email)).
-      const { data: profileRow, error: profileError } = await supabase
+      // Upsert direto em user_profiles (sem tabelas auxiliares)
+      const { error } = await supabase
         .from("user_profiles")
         .upsert(
           {
@@ -198,23 +188,8 @@ export function StaffTab() {
             ...profileBase,
           } as any,
           { onConflict: "email" },
-        )
-        .select("id")
-        .maybeSingle();
-      if (profileError) throw profileError;
-      if (!profileRow?.id) throw new Error("Não foi possível obter o ID do perfil");
-
-      // Passo B: Upsert em user_profile_roles usando a FK correta: user_profile_id
-      const { error: roleError } = await supabase
-        .from("user_profile_roles")
-        .upsert(
-          {
-            user_profile_id: profileRow.id,
-            role: payload.role,
-          } as any,
-          { onConflict: "user_profile_id" },
         );
-      if (roleError) throw roleError;
+      if (error) throw error;
     },
     onSuccess: async () => {
       toast.success("Salvo");
@@ -233,7 +208,6 @@ export function StaffTab() {
       await qc.invalidateQueries({ queryKey: ["staff", "user_profiles"] });
     },
     onError: (e: any) => {
-      if (isForeignKeyViolation(e)) return toastDeleteBlocked("Registros relacionados");
       toast.error(e?.message ?? "Erro ao excluir");
     },
   });
