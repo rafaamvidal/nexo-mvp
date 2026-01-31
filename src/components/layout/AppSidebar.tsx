@@ -1,7 +1,10 @@
-import { BarChart3, Calculator, Factory, LayoutGrid, Package, ShoppingCart, Truck, Users, Wallet } from "lucide-react";
+import * as React from "react";
+import { BarChart3, Calculator, Factory, LayoutGrid, Package, Settings, ShoppingCart, Truck, Users, Wallet } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 
 import { useIsAdmin } from "@/hooks/useIsAdmin";
+import { useAuth } from "@/hooks/useAuth";
+import { ProfileDialog } from "@/components/profile/ProfileDialog";
 
 import {
   Sidebar,
@@ -12,9 +15,12 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarFooter,
+  SidebarSeparator,
   useSidebar,
 } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 
 const items = [
   { title: "Dashboard", url: "/", icon: LayoutGrid },
@@ -37,6 +43,9 @@ export function AppSidebar() {
   const collapsed = state === "collapsed";
   const location = useLocation();
   const currentPath = location.pathname;
+
+  const { user } = useAuth();
+  const [profileOpen, setProfileOpen] = React.useState(false);
 
   const { data: isAdmin } = useIsAdmin();
 
@@ -77,6 +86,28 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
+
+      <SidebarSeparator />
+
+      <SidebarFooter>
+        <div className={cn("flex items-center gap-2", collapsed ? "justify-center" : "justify-between")}>
+          {!collapsed ? (
+            <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">{user?.email ?? ""}</span>
+          ) : null}
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={() => setProfileOpen(true)}
+            aria-label="Alterar senha"
+            title="Perfil / Alterar senha"
+          >
+            <Settings />
+          </Button>
+        </div>
+
+        <ProfileDialog open={profileOpen} onOpenChange={setProfileOpen} />
+      </SidebarFooter>
     </Sidebar>
   );
 }
