@@ -11,8 +11,19 @@ type Payload = {
   full_name?: string | null;
   role: "admin" | "staff";
   status: "active" | "inactive";
-  password: string;
 };
+
+function generateTempPassword(length = 20) {
+  // Avoid ambiguous chars; keep it URL/clipboard friendly.
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789@#$%*!?-_";
+  const bytes = new Uint8Array(length);
+  crypto.getRandomValues(bytes);
+  let out = "";
+  for (let i = 0; i < length; i++) {
+    out += alphabet[bytes[i] % alphabet.length];
+  }
+  return out;
+}
 
 function json(status: number, body: unknown) {
   return new Response(JSON.stringify(body), {
@@ -68,14 +79,13 @@ Deno.serve(async (req) => {
   const full_name = payload.full_name ? String(payload.full_name).trim() : null;
   const role = payload.role;
   const status = payload.status;
-  const password = String(payload.password ?? "");
+  const password = generateTempPassword();
 
   if (!email || !email.includes("@")) return json(400, { ok: false, message: "E-mail inválido" });
   if (role !== "admin" && role !== "staff") return json(400, { ok: false, message: "Cargo inválido" });
   if (status !== "active" && status !== "inactive") return json(400, { ok: false, message: "Status inválido" });
-  if (!password || password.length < 8) {
-    return json(400, { ok: false, message: "Senha padrão inválida (mínimo 8 caracteres)" });
-  }
+  // Password is generated server-side. Keep a minimum to avoid misconfig.
+  if (!password || password.length < 12) return json(500, { ok: false, message: "Server misconfigured" });
 
   const adminClient = createClient(supabaseUrl, serviceRoleKey);
 
@@ -116,5 +126,5 @@ Deno.serve(async (req) => {
     return json(400, { ok: false, message: upsertErr.message });
   }
 
-  return json(200, { ok: true });
+  return json(200, { ok: true, temporary_password: password });
 });
