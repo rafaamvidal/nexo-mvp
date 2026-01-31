@@ -1,88 +1,104 @@
 
-Objetivo
-- Fazer a aba “Usuários / Staff” funcionar de ponta a ponta no /cadastros, com CRUD completo (Novo/Editar/Excluir) e acesso restrito a administradores, sem criar usuários no Auth agora.
-- Corrigir o motivo principal de “não aparecer nada” hoje: o seu usuário (admin@erp.com.br) não está com o papel “admin” cadastrado na tabela segura de papéis (user_roles), então a aba fica bloqueada.
+## Objetivo
+Implementar a funcionalidade “Alterar Senha” para o usuário logado, via um modal (Dialog) acessível pela Sidebar, usando `supabase.auth.updateUser({ password })` e feedback via toast.
 
-O que encontrei no código atual
-- O componente `src/components/staff/StaffTab.tsx` já está implementado com CRUD e modal (Novo/Editar/Excluir) usando Supabase + React Query.
-- A página `src/pages/Cadastros.tsx` já renderiza `<StaffTab />` no tab `usuarios`.
-- O hook `src/hooks/useIsAdmin.ts` verifica admin pela tabela `public.user_roles`.
-- Nos logs de rede, a query `GET /rest/v1/user_roles?...` está retornando `[]` (vazio) para o seu user_id, então `useIsAdmin()` retorna falso e a aba fica restrita.
-- Existe um alerta de segurança nas instruções: “Roles MUST be stored in a separate table”. Hoje o `StaffTab` grava `role` diretamente em `user_profiles`, o que é arriscado se alguém futuramente usar isso para permissão.
+---
 
-Decisões (alinhadas com sua resposta)
-- Fonte de permissões: `user_roles` (correto e mais seguro).
-- `user_profiles` continua sendo a allowlist (nome, e-mail, status), mas vamos separar o “cargo” em uma tabela específica de allowlist para não violar a regra de segurança.
+## O que vou inspecionar/seguir do projeto (para manter consistência)
+- O app já usa **Radix Dialog** via `src/components/ui/dialog.tsx`.
+- Inputs/Botões padrão já existem (`Input`, `Button`, `Label`).
+- O projeto já usa **sonner** (`toast.success`, `toast.error`) em `src/pages/Auth.tsx` e outras páginas.
+- A sidebar já tem componentes prontos para **Footer/Separator** (`SidebarFooter`, `SidebarSeparator`) exportados em `src/components/ui/sidebar.tsx`.
+- O usuário logado está disponível via `useAuth()`.
 
-Plano de implementação
+---
 
-1) Desbloquear o acesso de admin para o seu usuário atual (admin@erp.com.br)
-- Problema: você está logado, mas não existe registro de role “admin” em `public.user_roles` para o seu `user_id`, por isso o StaffTab não carrega.
-- Ação: inserir o papel admin para o seu usuário na tabela `public.user_roles`.
-  - Você pode fazer isso no Supabase SQL Editor (ação de DADOS, não é migração de estrutura), com um comando como:
-    - `INSERT INTO public.user_roles (user_id, role) VALUES ('SEU_USER_ID', 'admin') ON CONFLICT DO NOTHING;`
-  - Eu vou confirmar o `user_id` correto lendo o usuário atual (via logs/consulta) e te entregar o SQL exato.
-- Resultado esperado: ao recarregar /cadastros, o tab “Usuários/Staff” passa a exibir a listagem e o botão “Novo”.
+## Implementação (Frontend)
 
-2) Corrigir o modelo de dados da allowlist para separar “Cargo/Perfil” em tabela própria (segurança)
-- Problema: hoje existe `user_profiles.role` e o CRUD grava “role” direto nele. Isso conflita com a regra de segurança (“não guardar roles em tabela de profiles/users”).
-- Ação (mudança de ESQUEMA via migration):
-  2.1) Criar uma tabela para roles da allowlist (por perfil)
-  - Exemplo de estrutura:
-    - `public.user_profile_roles`:
-      - `id uuid pk default gen_random_uuid()`
-      - `user_profile_id uuid not null references public.user_profiles(id) on delete cascade`
-      - `role public.app_role not null`
-      - `unique(user_profile_id)` (um papel por allowlist; se quiser múltiplos, vira `unique(user_profile_id, role)`)
-  2.2) (Opcional, recomendado) Tornar `public.user_profiles.email` único
-  - Criar índice/constraint unique em `lower(email)` para evitar duplicidade por caixa alta/baixa.
-  2.3) Ajustar RLS da nova tabela `user_profile_roles`
-  - Permitir ALL somente para admin, usando `has_role(auth.uid(), 'admin')`.
-- Resultado: “Cargo” fica tecnicamente separado, e o app continua mostrando/gerenciando o cargo na UI.
+### 1) Criar `src/components/profile/ProfileDialog.tsx`
+**Responsabilidade**: Modal com formulário para atualização de senha.
 
-3) Ajustar o StaffTab para usar a nova tabela de roles (sem depender de user_profiles.role)
-- Ação (código):
-  - Atualizar `fetchAllowlistUsers()` para buscar:
-    - `user_profiles` (id, email, full_name, status, created_at)
-    - e o role via relação `user_profile_roles(role)` (select com join do Supabase).
-  - Atualizar o schema/validação do formulário:
-    - Continuar exigindo role e status no modal.
-  - Atualizar `upsertUser`:
-    - Quando “Novo”:
-      1) inserir em `user_profiles` (full_name, email, status)
-      2) inserir em `user_profile_roles` com o `user_profile_id` retornado e `role`
-    - Quando “Editar”:
-      1) update em `user_profiles`
-      2) upsert/update em `user_profile_roles` (trocar role)
-  - Atualizar `deleteUser`:
-    - deletar de `user_profiles` deve cascatar em `user_profile_roles` (por FK on delete cascade).
-- Resultado: CRUD completo continua igual para você, mas internamente fica seguro e alinhado à regra de roles em tabela separada.
+**UI**
+- Dialog com:
+  - Título: “Perfil” ou “Alterar senha”
+  - Campo 1: “Nova senha” (`type="password"`, `autoComplete="new-password"`)
+  - Campo 2: “Confirmar nova senha” (`type="password"`, `autoComplete="new-password"`)
+  - Botão “Salvar”
+  - (Opcional) Texto pequeno: “Mínimo 6 caracteres”.
 
-4) Garantir UX consistente com as outras abas (Clientes/Fornecedores)
-- Verificar se:
-  - Botão “Novo” aparece no topo do StaffTab (como já está no componente).
-  - Listagem com colunas: Nome, Email, Cargo, Status, Ações (Editar/Excluir).
-  - Remover qualquer “placeholder/trava” remanescente (se existir em algum outro arquivo/branch).
-- Observação: como a frase “Por enquanto, apenas visualização” não existe no código atual que eu li, a causa mais provável do “placeholder” é o bloqueio de admin (item 1). Mesmo assim, vou fazer uma busca final no projeto e remover qualquer fallback antigo se estiver em outro componente.
+**Validação**
+- Validar no submit:
+  - `newPassword.length >= 6`
+  - `newPassword === confirmPassword`
+- Vou usar `zod` + `react-hook-form` (mesmo padrão do `Auth.tsx`) para:
+  - Mensagens claras
+  - Manter consistência de arquitetura
+- Se o usuário tentar salvar com erro:
+  - `toast.error("…")` com mensagem amigável (ex: “As senhas não conferem”, “Senha muito curta”).
 
-5) Testes (checklist)
-- Logado como admin@erp.com.br (com role admin em `user_roles`):
-  - Abrir Cadastros → Usuários/Staff
-  - Criar um novo registro (Novo) e confirmar que aparece na tabela após salvar
-  - Editar (alterar nome, status, role) e confirmar atualização
-  - Excluir e confirmar remoção
-- Logado com um usuário não-admin:
-  - Confirmar que não vê a lista completa e não consegue CRUD (apenas card restrito)
-- Teste de duplicidade:
-  - Tentar cadastrar o mesmo e-mail duas vezes e garantir erro amigável (se aplicarmos unique)
+**Lógica Supabase**
+- Ao salvar:
+  - `await supabase.auth.updateUser({ password: newPassword })`
+- Em caso de sucesso:
+  - `toast.success("Senha atualizada com sucesso")`
+  - Fechar dialog e resetar campos (para não ficar senha em memória/DOM)
+- Em caso de erro:
+  - `toast.error(error.message ?? "Erro ao atualizar senha")`
+  - Manter modal aberto para o usuário tentar novamente
 
-Riscos e cuidados
-- Se você já tem dados em `user_profiles.role`, a migração deve prever:
-  - Migrar os valores existentes para `user_profile_roles` antes de remover/ignorar a coluna `role`.
-  - Eu vou incluir um passo de “migração de dados” (UPDATE/INSERT) separado do migration de schema, para não perder nada.
-- Importante: mesmo mantendo allowlist, o “cargo” da allowlist não deve ser usado para autorizar telas sensíveis; as permissões do app devem continuar vindo de `user_roles` (como você escolheu). A allowlist serve para permitir/bloquear acesso por e-mail/status.
+**Estados**
+- `isSubmitting` para desabilitar botão e evitar double submit.
+- Ao fechar o Dialog (cancelar/esc), limpar os campos.
 
-Entregáveis quando você aprovar este plano (na fase de implementação)
-- Migration SQL criando `user_profile_roles` + RLS + unique email (se aprovado).
-- Ajustes no `StaffTab.tsx` para ler/escrever role via `user_profile_roles`.
-- Um comando SQL pronto para você rodar e marcar o seu usuário como admin em `user_roles`.
+**Observação importante (edge case)**
+- O Supabase pode exigir “login recente” para ações sensíveis. Se vier erro do tipo “requires recent login”, vamos apenas mostrar o `error.message` via toast (ponto de melhoria futura: fluxo de reautenticação).
+
+---
+
+### 2) Integrar acesso na Sidebar (`src/components/layout/AppSidebar.tsx`)
+Hoje a `AppSidebar` só renderiza menu. Vamos adicionar:
+- Um `SidebarSeparator` antes do rodapé (opcional, mas melhora visual).
+- Um `SidebarFooter` com:
+  - E-mail do usuário logado (`useAuth().user?.email`)
+  - Botão discreto com ícone (Lucide: `Settings` ou `UserCog`)
+  - Ao clicar: abre o `ProfileDialog`
+
+**Comportamento com sidebar colapsada**
+- Quando colapsada:
+  - Esconder o texto do e-mail (para não quebrar layout)
+  - Manter apenas o botão ícone
+  - Tooltip no ícone: “Perfil / Alterar senha”
+
+**Estrutura sugerida**
+- Dentro do `AppSidebar`:
+  - `const { user } = useAuth();`
+  - `const [profileOpen, setProfileOpen] = useState(false);`
+  - Renderizar `<ProfileDialog open={profileOpen} onOpenChange={setProfileOpen} />` junto ao footer (ou no final do Sidebar) para ficar “perto” do gatilho.
+
+**Acessibilidade**
+- Botão com `aria-label="Perfil"` e `title`/Tooltip.
+- Labels vinculados aos inputs.
+
+---
+
+## Testes manuais (checklist)
+1. Logar com qualquer usuário.
+2. Abrir o modal pelo ícone na Sidebar.
+3. Tentar salvar com senha < 6 → deve bloquear e mostrar toast de erro.
+4. Tentar salvar com senhas diferentes → deve bloquear e mostrar toast de erro.
+5. Salvar com senha válida → toast success + modal fecha.
+6. Fazer logout e login com a nova senha → deve funcionar.
+7. Testar no modo sidebar colapsado (ícone visível + tooltip).
+
+---
+
+## Arquivos que serão alterados/criados
+- Criar: `src/components/profile/ProfileDialog.tsx`
+- Editar: `src/components/layout/AppSidebar.tsx`
+
+---
+
+## Possíveis melhorias futuras (não vou fazer agora, mas deixo mapeado)
+- Exigir “Senha atual” antes de permitir troca (mais segurança).
+- Fluxo de reautenticação quando o Supabase retornar erro de “recent login”.
+- Adicionar “Mostrar/ocultar senha” (ícone Eye) nos inputs.
