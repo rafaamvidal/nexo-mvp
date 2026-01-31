@@ -198,12 +198,23 @@ export function StaffTab() {
       const { data, error } = await supabase.functions.invoke("provision-staff-user", {
         body: {
           ...profileBase,
-          password: "Empresa@123",
         },
       });
 
-      if (error) throw new Error(error.message);
-      if (!data?.ok) throw new Error(data?.message ?? "Erro ao provisionar usuário");
+       if (error) throw new Error(error.message);
+       if (!data?.ok) throw new Error(data?.message ?? "Erro ao provisionar usuário");
+
+       const tempPassword = (data as any)?.temporary_password as string | undefined;
+       if (tempPassword) {
+         try {
+           await navigator.clipboard.writeText(tempPassword);
+           toast.success("Usuário criado. Senha temporária copiada para a área de transferência.");
+         } catch {
+           toast.success(`Usuário criado. Senha temporária: ${tempPassword}`);
+         }
+       } else {
+         toast.success("Usuário criado.");
+       }
     },
     onSuccess: async () => {
       toast.success("Salvo");
