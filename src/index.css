@@ -165,3 +165,7 @@ All colors MUST be HSL.
     text-wrap: balance;
   }
 }
+
+#lovable-badge {
+display: none !important;
+}
