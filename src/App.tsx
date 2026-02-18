@@ -22,7 +22,7 @@ import { RequireAdmin } from "@/components/auth/RequireAdmin";
 
 const queryClient = new QueryClient();
 
-const BRAND_TITLE = "Nexo ERP | Gestão Inteligente";
+const BRAND_TITLE = "AGILIX | Gestão Inteligente";
 
 const App = () => {
   React.useEffect(() => {

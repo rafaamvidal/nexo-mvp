@@ -35,8 +35,7 @@ const items = [
   { title: "Financeiro", url: "/financeiro", icon: Wallet },
 ];
 
-const LOGO_URL =
-  "https://lesmncgjcvguyizzjvrw.supabase.co/storage/v1/object/public/branding/nexo_erp_logo.jpg";
+import agiliXLogo from "@/assets/agilix_logo.png";
 
 export function AppSidebar() {
   const { state } = useSidebar();
@@ -56,10 +55,10 @@ export function AppSidebar() {
       <SidebarContent>
         <SidebarGroup>
           <SidebarGroupLabel className="px-2">
-            <span className="sr-only">Nexo ERP</span>
+            <span className="sr-only">AGILIX</span>
             <img
-              src={LOGO_URL}
-              alt="Nexo ERP"
+              src={agiliXLogo}
+              alt="AGILIX"
               loading="lazy"
               className={cn(
                 "h-auto w-[140px] max-w-full object-contain drop-shadow-sm dark:brightness-110 dark:contrast-110",
