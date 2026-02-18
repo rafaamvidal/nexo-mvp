@@ -66,7 +66,7 @@ export function AppSidebar() {
               )}
             />
           </SidebarGroupLabel>
-          <SidebarGroupContent>
+          <SidebarGroupContent className="mt-3">
             <SidebarMenu>
               {visibleItems.map((item) => {
                 const active = item.url === "/" ? currentPath === "/" : currentPath.startsWith(item.url);
