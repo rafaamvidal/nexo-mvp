@@ -12,8 +12,7 @@ import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 
-const LOGO_URL =
-  "https://lesmncgjcvguyizzjvrw.supabase.co/storage/v1/object/public/branding/nexo_erp_logo.jpg";
+import agiliXLogo from "@/assets/agilix_logo.png";
 
 const schema = z.object({
   email: z.string().trim().email("E-mail inválido").max(255),
@@ -56,10 +55,10 @@ export default function Auth() {
     <div className="min-h-svh px-4 py-10">
       <div className="mx-auto w-full max-w-md">
         <div className="mb-6">
-          <h1 className="sr-only">Nexo ERP</h1>
+          <h1 className="sr-only">AGILIX</h1>
           <img
-            src={LOGO_URL}
-            alt="Nexo ERP"
+            src={agiliXLogo}
+            alt="AGILIX"
             loading="eager"
             className="mx-auto h-auto w-[200px] max-w-full object-contain drop-shadow-sm dark:brightness-110 dark:contrast-110"
           />
