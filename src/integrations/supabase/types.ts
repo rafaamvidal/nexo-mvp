@@ -122,6 +122,21 @@ export type Database = {
           },
         ]
       }
+      keep_alive: {
+        Row: {
+          created_at: string
+          id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+        }
+        Relationships: []
+      }
       manufacturing_orders: {
         Row: {
           code: string | null
@@ -652,6 +667,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      keep_alive_ping: { Args: never; Returns: undefined }
     }
     Enums: {
       allowlist_role: "admin" | "estoque" | "vendas" | "financeiro" | "rh"
