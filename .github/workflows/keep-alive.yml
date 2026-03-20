@@ -1,4 +1,4 @@
-name: Keep Alive
+name: Supabase Keep Alive
 
 on:
   schedule:
@@ -6,11 +6,19 @@ on:
   workflow_dispatch: # Allow manual trigger
 
 jobs:
-  ping:
+  keep-alive:
     runs-on: ubuntu-latest
     steps:
-      - name: Ping Supabase Edge Function
+      - name: Ping Supabase keep-alive function
         run: |
-          curl -f -i -X POST "https://dxwzqafpwshuxgvmurdy.supabase.co/functions/v1/keep-alive" \
-          -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
-          -H "Content-Type: application/json"
+          response=$(curl -s -o /dev/null -w "%{http_code}" \
+            -X POST \
+            "${{ secrets.SUPABASE_URL }}/functions/v1/keep-alive" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}" \
+            -H "Content-Type: application/json")
+          echo "Response status: $response"
+          if [ "$response" != "200" ]; then
+            echo "Keep-alive failed with status $response"
+            exit 1
+          fi
+          echo "Keep-alive successful"
