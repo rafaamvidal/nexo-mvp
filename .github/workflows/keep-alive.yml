@@ -1,8 +1,8 @@
 name: Supabase Keep Alive
 
 on:
- # schedule:
- #   - cron: '0 0 * * *' # A cada 24 horas (todos os dias às 00:00 UTC)
+  schedule:
+    - cron: '0 0 * * *' # A cada 24 horas (todos os dias às 00:00 UTC)
   workflow_dispatch: # Allow manual trigger
 
 jobs:
