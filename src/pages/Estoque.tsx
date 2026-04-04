@@ -1,13 +1,15 @@
 import * as React from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Boxes, Search } from "lucide-react";
+import { Boxes, Pencil, Search } from "lucide-react";
 
 import { AppShell } from "@/components/layout/AppShell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { StockQuickAdjust } from "@/components/inventory/StockQuickAdjust";
+import { StockEditDialog } from "@/components/inventory/StockEditDialog";
 import { Badge } from "@/components/ui/badge";
 
 type ProductLite = {
@@ -31,6 +33,7 @@ async function fetchProductsLite(): Promise<ProductLite[]> {
 
 export default function Estoque() {
   const [q, setQ] = React.useState("");
+  const [editProduct, setEditProduct] = React.useState<ProductLite | null>(null);
   const { data, isLoading, error } = useQuery({ queryKey: ["products", "lite"], queryFn: fetchProductsLite });
 
   const filtered = React.useMemo(() => {
@@ -70,7 +73,16 @@ export default function Estoque() {
                 <CardHeader className="pb-2">
                   <CardTitle className="flex items-center justify-between gap-3 text-base">
                     <span className="truncate">{p.name}</span>
-                    <Boxes className="h-4 w-4 text-muted-foreground" />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 shrink-0"
+                      aria-label="Editar estoque"
+                      onClick={() => setEditProduct(p)}
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
                   </CardTitle>
                   <div className="flex items-center gap-2">
                     <span className={"text-sm font-bold " + (low ? "text-destructive" : "")}>{p.current_stock}</span>
@@ -92,6 +104,14 @@ export default function Estoque() {
           })}
         </div>
       </section>
+
+      {editProduct && (
+        <StockEditDialog
+          open={!!editProduct}
+          onOpenChange={(v) => { if (!v) setEditProduct(null); }}
+          product={editProduct}
+        />
+      )}
     </AppShell>
   );
 }
