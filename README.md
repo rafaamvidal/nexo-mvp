@@ -1,73 +1,127 @@
-# Welcome to your Lovable project
+# AGILIX — Gestão Inteligente
 
-## Project info
+**AGILIX** é um sistema web completo de gestão empresarial (ERP) voltado para pequenas e médias empresas. Ele centraliza o controle de estoque, vendas, compras, financeiro, produção e cadastros em uma única plataforma moderna e intuitiva.
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+---
 
-## How can I edit this code?
+## 🧩 Funcionalidades
 
-There are several ways of editing your application.
+| Módulo | Descrição |
+|---|---|
+| **Dashboard** | Visão geral do negócio com indicadores principais |
+| **Estoque** | Controle de quantidades, ajustes manuais e movimentações |
+| **Produtos** | Cadastro de matérias-primas e produtos acabados (SKU, preço, categoria) |
+| **Vendas** | Registro de vendas, itens vendidos, descontos e formas de pagamento |
+| **Compras** | Pedidos de compra com fornecedores, itens e controle de entrega |
+| **Financeiro** | Contas a pagar e receber, categorias e status de pagamento |
+| **Produção** | Ordens de fabricação vinculadas a produtos |
+| **Cadastros** | Clientes e fornecedores com dados completos |
+| **Custos/Precificação** | Análise de custos e formação de preços (somente admin) |
+| **Relatórios** | Relatórios gerenciais (somente admin) |
 
-**Use Lovable**
+## 🔐 Autenticação e Permissões
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+- Login por e-mail/senha via **Supabase Auth**
+- Controle de acesso baseado em **roles** (`admin`, `staff`, `estoque`, `vendas`, `financeiro`)
+- Páginas restritas a administradores (Relatórios e Custos)
+- Convite de equipe com provisionamento automático
 
-Changes made via Lovable will be committed automatically to this repo.
+## 🛠️ Tecnologias
 
-**Use your preferred IDE**
+| Camada | Tecnologia |
+|---|---|
+| Frontend | React 18, TypeScript 5, Vite 5 |
+| Estilização | Tailwind CSS 3, shadcn/ui |
+| Estado/Data | TanStack React Query, React Hook Form, Zod |
+| Backend/BD | Supabase (PostgreSQL, Auth, Edge Functions, RLS) |
+| Roteamento | React Router v6 |
+| Gráficos | Recharts |
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+## 📁 Estrutura do Projeto
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+```
+src/
+├── components/       # Componentes reutilizáveis (UI, layout, inventory, auth, etc.)
+├── hooks/            # Hooks customizados (useAuth, useIsAdmin, etc.)
+├── integrations/     # Configuração do Supabase (client + tipos gerados)
+├── lib/              # Utilitários (tratamento de erros, helpers)
+├── pages/            # Páginas da aplicação (Dashboard, Estoque, Vendas, etc.)
+├── types/            # Tipos TypeScript compartilhados
+├── assets/           # Imagens e logos
+└── main.tsx          # Ponto de entrada da aplicação
 
-Follow these steps:
+supabase/
+├── functions/        # Edge Functions (keep-alive, provision-staff-user)
+├── migrations/       # Migrações SQL do banco de dados
+└── config.toml       # Configuração local do Supabase
+```
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+## 🚀 Como rodar localmente
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+### Pré-requisitos
+- **Node.js** 18+ e **npm** (ou bun)
 
-# Step 3: Install the necessary dependencies.
-npm i
+### Passos
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
+```bash
+# 1. Clone o repositório
+git clone <URL_DO_REPOSITÓRIO>
+cd <NOME_DO_PROJETO>
+
+# 2. Instale as dependências
+npm install
+
+# 3. Configure as variáveis de ambiente
+# Crie um arquivo .env na raiz com:
+#   VITE_SUPABASE_URL=https://seu-projeto.supabase.co
+#   VITE_SUPABASE_ANON_KEY=sua-anon-key
+
+# 4. Inicie o servidor de desenvolvimento
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+A aplicação estará disponível em `http://localhost:8080`.
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+## 🧪 Testes
 
-**Use GitHub Codespaces**
+```bash
+npm run test
+```
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+## 📦 Build para Produção
 
-## What technologies are used for this project?
+```bash
+npm run build
+```
 
-This project is built with:
+Os arquivos finais serão gerados na pasta `dist/`.
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+---
 
-## How can I deploy this project?
+## 📝 Resumo para IAs / IDEs com IA (Antigravity, Cursor, etc.)
 
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
+> **Use este prompt para contextualizar a IA sobre o projeto:**
 
-## Can I connect a custom domain to my Lovable project?
+```
+Este é o AGILIX, um sistema ERP web para pequenas e médias empresas.
 
-Yes, you can!
+Stack: React 18 + TypeScript + Vite + Tailwind CSS + shadcn/ui.
+Backend: Supabase (PostgreSQL com RLS, Auth, Edge Functions).
+Estado: TanStack React Query para cache/fetch, React Hook Form + Zod para formulários.
+Roteamento: React Router v6 com rotas protegidas por autenticação e roles.
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+Módulos: Dashboard, Estoque, Produtos, Vendas, Compras, Financeiro, Produção, Cadastros, Custos e Relatórios.
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+Convenções:
+- Componentes em src/components/ organizados por domínio (inventory/, auth/, layout/, ui/).
+- Páginas em src/pages/, cada uma corresponde a uma rota.
+- Hooks customizados em src/hooks/ (useAuth para autenticação, useIsAdmin para verificar role).
+- Tipos do Supabase gerados automaticamente em src/integrations/supabase/types.ts (não editar manualmente).
+- Design system usa tokens semânticos CSS (HSL) definidos em src/index.css e tailwind.config.ts.
+- Componentes UI são do shadcn/ui em src/components/ui/.
+- Todas as queries ao banco usam o client Supabase de src/integrations/supabase/client.ts.
+- RLS ativo em todas as tabelas. Roles armazenadas na tabela user_roles (nunca na tabela profiles).
+- Variáveis de ambiente prefixadas com VITE_ para exposição ao frontend.
+
+Ao fazer alterações, mantenha a arquitetura existente, use os tokens do design system (nunca cores hardcoded), e preserve a tipagem TypeScript.
+```
