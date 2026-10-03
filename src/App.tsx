@@ -49,8 +49,8 @@ const App = () => {
         <Sonner />
         <AuthProvider>
           <OrganizationProvider>
-            <CompanySetupModal />
             <BrowserRouter>
+              <CompanySetupModal />
               <React.Suspense fallback={<PageFallback />}>
                 <Routes>
                   <Route path="/auth" element={<Auth />} />

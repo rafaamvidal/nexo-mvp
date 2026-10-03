@@ -1,3 +1,4 @@
+import * as React from "react";
 import { BarChart3, Calculator, Factory, LayoutGrid, Package, Settings, ShoppingCart, Truck, UserCheck, Users, Wallet } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 
