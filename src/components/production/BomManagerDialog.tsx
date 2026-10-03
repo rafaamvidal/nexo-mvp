@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { ChefHat, Plus, Save, Trash2 } from "lucide-react";
+import { Calculator, ChefHat, Plus, Save, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -9,48 +9,78 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { getProductBom, saveProductBom, type BomIngredient } from "@/lib/bom";
+import { useOrganization } from "@/contexts/OrganizationContext";
 import { toast } from "sonner";
 
 interface BomManagerDialogProps {
   trigger?: React.ReactNode;
+  defaultProductId?: string;
+  isOpenControlled?: boolean;
+  onOpenChangeControlled?: (open: boolean) => void;
 }
 
-export function BomManagerDialog({ trigger }: BomManagerDialogProps) {
-  const [open, setOpen] = React.useState(false);
-  const [selectedProductId, setSelectedProductId] = React.useState<string>("");
+function formatBRL(value: number) {
+  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
+}
+
+export function BomManagerDialog({
+  trigger,
+  defaultProductId,
+  isOpenControlled,
+  onOpenChangeControlled,
+}: BomManagerDialogProps) {
+  const { currentOrg } = useOrganization();
+  const [internalOpen, setInternalOpen] = React.useState(false);
+
+  const open = isOpenControlled !== undefined ? isOpenControlled : internalOpen;
+  const setOpen = onOpenChangeControlled || setInternalOpen;
+
+  const [selectedProductId, setSelectedProductId] = React.useState<string>(defaultProductId ?? "");
   const [ingredients, setIngredients] = React.useState<BomIngredient[]>([]);
   const qc = useQueryClient();
 
-  // Busca produtos finais
+  React.useEffect(() => {
+    if (defaultProductId) {
+      setSelectedProductId(defaultProductId);
+    }
+  }, [defaultProductId]);
+
+  // Busca produtos finais da empresa ativa
   const { data: finishedProducts } = useQuery({
-    queryKey: ["products", "finished_for_bom"],
+    queryKey: ["products", "finished_for_bom", currentOrg?.id],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let q = supabase
         .from("products")
-        .select("id,name,unit")
+        .select("id,name,unit,price_cost,price_sale")
         .eq("status", "Ativo")
         .eq("type", "Produto Final")
         .order("name", { ascending: true });
+
+      if (currentOrg?.id) q = q.eq("organization_id", currentOrg.id);
+      const { data, error } = await q;
       if (error) throw error;
       return data ?? [];
     },
-    enabled: open,
+    enabled: open && Boolean(currentOrg?.id),
   });
 
-  // Busca matérias-primas
+  // Busca matérias-primas da empresa ativa
   const { data: rawMaterials } = useQuery({
-    queryKey: ["products", "raw_for_bom"],
+    queryKey: ["products", "raw_for_bom", currentOrg?.id],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let q = supabase
         .from("products")
-        .select("id,name,unit")
+        .select("id,name,unit,price_cost")
         .eq("status", "Ativo")
         .eq("type", "Matéria-Prima")
         .order("name", { ascending: true });
+
+      if (currentOrg?.id) q = q.eq("organization_id", currentOrg.id);
+      const { data, error } = await q;
       if (error) throw error;
       return data ?? [];
     },
-    enabled: open,
+    enabled: open && Boolean(currentOrg?.id),
   });
 
   // Quando o produto final selecionado mudar, carrega a Ficha Técnica
@@ -90,6 +120,7 @@ export function BomManagerDialog({ trigger }: BomManagerDialogProps) {
               rawMaterialId: rawId,
               rawMaterialName: raw?.name,
               unit: raw?.unit,
+              costUnit: Number(raw?.price_cost ?? 0),
             }
           : it
       )
@@ -102,14 +133,34 @@ export function BomManagerDialog({ trigger }: BomManagerDialogProps) {
     );
   };
 
+  // Cálculo do Custo de Insumos da Receita
+  const totalRecipeCost = React.useMemo(() => {
+    let sum = 0;
+    for (const item of ingredients) {
+      const raw = (rawMaterials ?? []).find((r) => r.id === item.rawMaterialId);
+      const cost = Number(raw?.price_cost ?? item.costUnit ?? 0);
+      sum += cost * Number(item.quantityPerUnit || 0);
+    }
+    return sum;
+  }, [ingredients, rawMaterials]);
+
   const saveMutation = useMutation({
     mutationFn: async () => {
       if (!selectedProductId) throw new Error("Selecione um produto final");
-      await saveProductBom(selectedProductId, ingredients);
+      await saveProductBom(selectedProductId, ingredients, currentOrg?.id);
+
+      // Atualiza opcionalmente o price_cost do produto final no banco
+      if (totalRecipeCost > 0) {
+        await supabase
+          .from("products")
+          .update({ price_cost: Number(totalRecipeCost.toFixed(4)) } as any)
+          .eq("id", selectedProductId);
+      }
     },
     onSuccess: () => {
-      toast.success("Ficha Técnica salva com sucesso!");
+      toast.success("Ficha Técnica salva e custo unitário atualizado!");
       qc.invalidateQueries({ queryKey: ["manufacturing_orders"] });
+      qc.invalidateQueries({ queryKey: ["products"] });
       setOpen(false);
     },
     onError: (e: any) => toast.error(e?.message ?? "Erro ao salvar Ficha Técnica"),
@@ -117,26 +168,28 @@ export function BomManagerDialog({ trigger }: BomManagerDialogProps) {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        {trigger ?? (
+      {trigger ? (
+        <DialogTrigger asChild>{trigger}</DialogTrigger>
+      ) : (
+        <DialogTrigger asChild>
           <Button type="button" variant="outline" className="gap-2">
             <ChefHat className="h-4 w-4" />
             Fichas Técnicas (Receitas)
           </Button>
-        )}
-      </DialogTrigger>
+        </DialogTrigger>
+      )}
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <ChefHat className="h-5 w-5 text-primary" />
-            <span>Ficha Técnica de Produção (BOM)</span>
+            <span>Ficha Técnica de Produção (Receita Industrial)</span>
           </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4 py-2">
           <p className="text-xs text-muted-foreground">
-            Defina a receita dos seus produtos acabados. Ao concluir uma ordem de produção, os insumos
-            cadastrados aqui serão baixados automaticamente do estoque.
+            Defina a receita exata do produto. Ao produzir este item, o sistema dará baixa automática nas
+            matérias-primas e recalculará o custo de produção unitário.
           </p>
 
           <div className="grid gap-2">
@@ -158,9 +211,11 @@ export function BomManagerDialog({ trigger }: BomManagerDialogProps) {
           {selectedProductId && (
             <div className="space-y-3 rounded-xl border bg-muted/15 p-4">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                  Insumos para 1 Unidade
-                </span>
+                <div>
+                  <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                    Insumos por 1 Unidade
+                  </span>
+                </div>
                 <Button
                   type="button"
                   variant="outline"
@@ -181,8 +236,10 @@ export function BomManagerDialog({ trigger }: BomManagerDialogProps) {
                 <div className="space-y-2">
                   {ingredients.map((item, idx) => {
                     const selectedRaw = (rawMaterials ?? []).find((r) => r.id === item.rawMaterialId);
+                    const lineCost = Number(selectedRaw?.price_cost ?? 0) * Number(item.quantityPerUnit || 0);
+
                     return (
-                      <div key={idx} className="flex items-center gap-2">
+                      <div key={idx} className="flex flex-col gap-1 rounded-lg border bg-background/50 p-2 sm:flex-row sm:items-center">
                         <div className="flex-1">
                           <Select
                             value={item.rawMaterialId}
@@ -194,43 +251,60 @@ export function BomManagerDialog({ trigger }: BomManagerDialogProps) {
                             <SelectContent>
                               {(rawMaterials ?? []).map((rm) => (
                                 <SelectItem key={rm.id} value={rm.id}>
-                                  {rm.name} ({rm.unit})
+                                  {rm.name} ({formatBRL(Number(rm.price_cost ?? 0))}/{rm.unit})
                                 </SelectItem>
                               ))}
                             </SelectContent>
                           </Select>
                         </div>
 
-                        <div className="w-24">
-                          <Input
-                            type="number"
-                            min={0.001}
-                            step="any"
-                            value={item.quantityPerUnit}
-                            onChange={(e) => handleQuantityChange(idx, Number(e.target.value))}
-                            placeholder="Qtd"
-                            className="h-9 text-xs"
-                          />
+                        <div className="flex items-center gap-2">
+                          <div className="w-24">
+                            <Input
+                              type="number"
+                              min={0.0001}
+                              step="any"
+                              value={item.quantityPerUnit}
+                              onChange={(e) => handleQuantityChange(idx, Number(e.target.value))}
+                              placeholder="Qtd"
+                              className="h-9 text-xs"
+                            />
+                          </div>
+
+                          <span className="w-12 text-xs font-medium text-muted-foreground">
+                            {selectedRaw?.unit ?? "un"}
+                          </span>
+
+                          <span className="w-16 text-right text-xs font-semibold text-foreground/80">
+                            {formatBRL(lineCost)}
+                          </span>
+
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleRemoveIngredient(idx)}
+                            className="h-8 w-8 text-destructive hover:bg-destructive/10"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
                         </div>
-
-                        <span className="w-10 text-xs text-muted-foreground">
-                          {selectedRaw?.unit ?? "un"}
-                        </span>
-
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleRemoveIngredient(idx)}
-                          className="h-8 w-8 text-destructive hover:bg-destructive/10"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
                       </div>
                     );
                   })}
                 </div>
               )}
+
+              {/* Custo Consolidado da Receita */}
+              <div className="mt-3 flex items-center justify-between border-t pt-3">
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Calculator className="h-4 w-4 text-primary" />
+                  <span>Custo Estimado dos Insumos (Unitário):</span>
+                </div>
+                <span className="text-sm font-extrabold text-primary">
+                  {formatBRL(totalRecipeCost)}
+                </span>
+              </div>
             </div>
           )}
 

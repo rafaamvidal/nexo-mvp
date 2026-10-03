@@ -27,6 +27,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { isForeignKeyViolation, toastDeleteBlocked } from "@/lib/supabaseErrors";
+import { useOrganization } from "@/contexts/OrganizationContext";
 
 type SupplierRow = { id: string; name: string };
 type ProductRawRow = { id: string; name: string; price_cost: number | null; unit: string };
@@ -65,11 +66,14 @@ function statusBadge(status: string | null) {
   return <Badge variant="outline">{status ?? "—"}</Badge>;
 }
 
-async function fetchPurchaseOrders(): Promise<PurchaseOrderRow[]> {
-  const { data, error } = await supabase
+async function fetchPurchaseOrders(orgId?: string): Promise<PurchaseOrderRow[]> {
+  let query = supabase
     .from("purchase_orders")
     .select("id,created_at,code,status,total_amount,order_date,expected_delivery_date,observations,supplier_id,suppliers(name)")
     .order("created_at", { ascending: false });
+
+  if (orgId) query = query.eq("organization_id", orgId);
+  const { data, error } = await query;
   if (error) throw error;
   return (data ?? []) as any;
 }
@@ -89,6 +93,7 @@ async function upsertPagarForPO(params: {
   amount: number;
   nextStatus: string;
   dueDate: string;
+  orgId?: string;
 }) {
   const { data: existing, error: selErr } = await supabase
     .from("financial_records")
@@ -110,6 +115,7 @@ async function upsertPagarForPO(params: {
     amount: Number(params.amount),
     due_date: params.dueDate,
     status: nextFinStatus,
+    organization_id: params.orgId,
   };
 
   if (existing?.id) {
@@ -121,28 +127,45 @@ async function upsertPagarForPO(params: {
   }
 }
 
-async function fetchSuppliers(): Promise<SupplierRow[]> {
-  const { data, error } = await supabase.from("suppliers").select("id,name").order("name", { ascending: true });
+async function fetchSuppliers(orgId?: string): Promise<SupplierRow[]> {
+  let query = supabase.from("suppliers").select("id,name").order("name", { ascending: true });
+  if (orgId) query = query.eq("organization_id", orgId);
+  const { data, error } = await query;
   if (error) throw error;
   return (data ?? []) as any;
 }
 
-async function fetchRawMaterials(): Promise<ProductRawRow[]> {
-  const { data, error } = await supabase
+async function fetchRawMaterials(orgId?: string): Promise<ProductRawRow[]> {
+  let query = supabase
     .from("products")
     .select("id,name,price_cost,unit")
     .eq("status", "Ativo")
     .eq("type", "Matéria-Prima")
     .order("name", { ascending: true });
+  if (orgId) query = query.eq("organization_id", orgId);
+  const { data, error } = await query;
   if (error) throw error;
   return (data ?? []) as any;
 }
 
 export default function Compras() {
   const qc = useQueryClient();
-  const { data, isLoading, error } = useQuery({ queryKey: ["purchase_orders"], queryFn: fetchPurchaseOrders });
-  const { data: suppliers } = useQuery({ queryKey: ["suppliers", "lite"], queryFn: fetchSuppliers });
-  const { data: raws } = useQuery({ queryKey: ["products", "raw"], queryFn: fetchRawMaterials });
+  const { currentOrg } = useOrganization();
+  const { data, isLoading, error } = useQuery({
+    queryKey: ["purchase_orders", currentOrg?.id],
+    queryFn: () => fetchPurchaseOrders(currentOrg?.id),
+    enabled: Boolean(currentOrg?.id),
+  });
+  const { data: suppliers } = useQuery({
+    queryKey: ["suppliers", "lite", currentOrg?.id],
+    queryFn: () => fetchSuppliers(currentOrg?.id),
+    enabled: Boolean(currentOrg?.id),
+  });
+  const { data: raws } = useQuery({
+    queryKey: ["products", "raw", currentOrg?.id],
+    queryFn: () => fetchRawMaterials(currentOrg?.id),
+    enabled: Boolean(currentOrg?.id),
+  });
 
   const [q, setQ] = React.useState("");
   const [open, setOpen] = React.useState(false);
@@ -196,7 +219,13 @@ export default function Compras() {
       const orderDate = new Date().toISOString().slice(0, 10);
       const { data: poInserted, error: poErr } = await supabase
         .from("purchase_orders")
-        .insert({ supplier_id: supplierId, status, order_date: orderDate, total_amount: Number(total) } as any)
+        .insert({
+          supplier_id: supplierId,
+          status,
+          order_date: orderDate,
+          total_amount: Number(total),
+          organization_id: currentOrg?.id,
+        } as any)
         .select("id")
         .single();
       if (poErr) throw poErr;
@@ -208,6 +237,7 @@ export default function Compras() {
         quantity: Number(it.quantity),
         unit_cost: Number(it.unit_cost),
         total: Number(it.quantity) * Number(it.unit_cost),
+        organization_id: currentOrg?.id,
       }));
 
       const { error: itemsErr } = await supabase.from("purchase_items").insert(payload as any);
@@ -222,6 +252,7 @@ export default function Compras() {
           amount: Number(total),
           nextStatus: status,
           dueDate: orderDate,
+          orgId: currentOrg?.id,
         });
       }
     },

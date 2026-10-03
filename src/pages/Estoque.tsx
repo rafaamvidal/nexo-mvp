@@ -1,6 +1,17 @@
 import * as React from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Boxes, History, Pencil, Search } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import {
+  AlertOctagon,
+  AlertTriangle,
+  ArrowRight,
+  Boxes,
+  History,
+  Pencil,
+  Search,
+  ShoppingCart,
+  TrendingDown,
+} from "lucide-react";
 
 import { AppShell } from "@/components/layout/AppShell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,6 +24,10 @@ import { StockEditDialog } from "@/components/inventory/StockEditDialog";
 import { StockMovementsHistory } from "@/components/inventory/StockMovementsHistory";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { useOrganization } from "@/contexts/OrganizationContext";
+import { formatBRL } from "@/lib/masks";
 
 type ProductLite = {
   id: string;
@@ -21,23 +36,33 @@ type ProductLite = {
   current_stock: number;
   min_stock: number;
   category: string | null;
+  price_cost: number | null;
 };
 
-async function fetchProductsLite(): Promise<ProductLite[]> {
-  const { data, error } = await supabase
+async function fetchProductsLite(orgId?: string): Promise<ProductLite[]> {
+  let query = supabase
     .from("products")
-    .select("id,name,unit,current_stock,min_stock,category")
+    .select("id,name,unit,current_stock,min_stock,category,price_cost")
     .eq("status", "Ativo")
     .order("name", { ascending: true });
+
+  if (orgId) query = query.eq("organization_id", orgId);
+  const { data, error } = await query;
   if (error) throw error;
   return (data ?? []) as any;
 }
 
 export default function Estoque() {
+  const { currentOrg } = useOrganization();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = React.useState("ajuste");
   const [q, setQ] = React.useState("");
   const [editProduct, setEditProduct] = React.useState<ProductLite | null>(null);
-  const { data, isLoading, error } = useQuery({ queryKey: ["products", "lite"], queryFn: fetchProductsLite });
+  const { data, isLoading, error } = useQuery({
+    queryKey: ["products", "lite", currentOrg?.id],
+    queryFn: () => fetchProductsLite(currentOrg?.id),
+    enabled: Boolean(currentOrg?.id),
+  });
 
   const filtered = React.useMemo(() => {
     const list = data ?? [];
@@ -46,18 +71,34 @@ export default function Estoque() {
     return list.filter((p) => p.name.toLowerCase().includes(term) || (p.category ?? "").toLowerCase().includes(term));
   }, [data, q]);
 
-  const lowStockCount = React.useMemo(() => {
-    return (data ?? []).filter((p) => Number(p.current_stock) < Number(p.min_stock)).length;
+  // Alertas e Sugestões de Reposição
+  const criticalItems = React.useMemo(() => {
+    const list = data ?? [];
+    return list.filter((p) => Number(p.current_stock) <= Number(p.min_stock));
   }, [data]);
+
+  const ruptureCount = React.useMemo(() => {
+    return criticalItems.filter((p) => Number(p.current_stock) <= 0).length;
+  }, [criticalItems]);
+
+  const totalReplenishmentCost = React.useMemo(() => {
+    return criticalItems.reduce((acc, p) => {
+      const needed = Math.max(0, Number(p.min_stock) * 2 - Number(p.current_stock));
+      const cost = Number(p.price_cost ?? 0);
+      return acc + needed * cost;
+    }, 0);
+  }, [criticalItems]);
+
+  const lowStockCount = criticalItems.length;
 
   return (
     <AppShell title="Controle de Estoque">
       <section className="mx-auto max-w-6xl">
         <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <div>
-            <h1 className="text-balance text-2xl font-extrabold">Estoque</h1>
+            <h1 className="text-balance text-2xl font-extrabold">Estoque & Almoxarifado</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Ajuste rápido de saldos e histórico detalhado de movimentações (Kardex).
+              Ajuste rápido de saldos, sugestão inteligente de reposição e histórico detalhado (Kardex).
             </p>
           </div>
           {activeTab === "ajuste" && (
@@ -75,17 +116,21 @@ export default function Estoque() {
 
         <div className="mt-5">
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="grid w-full grid-cols-2 sm:w-[420px]">
-              <TabsTrigger value="ajuste" className="gap-2">
+            <TabsList className="grid w-full grid-cols-3 sm:w-[520px]">
+              <TabsTrigger value="ajuste" className="gap-2 text-xs">
                 <Boxes className="h-4 w-4" />
-                Ajuste Rápido
+                Saldos & Ajustes
+              </TabsTrigger>
+              <TabsTrigger value="alertas" className="gap-2 text-xs">
+                <ShoppingCart className="h-4 w-4" />
+                Sugestão de Compra
                 {lowStockCount > 0 && (
                   <Badge variant="destructive" className="ml-1 h-5 px-1.5 text-[10px]">
-                    {lowStockCount} baixo
+                    {lowStockCount}
                   </Badge>
                 )}
               </TabsTrigger>
-              <TabsTrigger value="extrato" className="gap-2">
+              <TabsTrigger value="extrato" className="gap-2 text-xs">
                 <History className="h-4 w-4" />
                 Extrato / Kardex
               </TabsTrigger>
@@ -141,6 +186,162 @@ export default function Estoque() {
                   );
                 })}
               </div>
+            </TabsContent>
+
+            {/* ABA SUGESTÃO DE COMPRA / ALERTA DE REPOSIÇÃO */}
+            <TabsContent value="alertas" className="mt-5 space-y-4">
+              <div className="grid gap-4 sm:grid-cols-3">
+                <Card className="glass border-border/60">
+                  <CardHeader className="flex flex-row items-center justify-between pb-2">
+                    <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                      Itens Abaixo do Mínimo
+                    </CardTitle>
+                    <AlertTriangle className="h-4 w-4 text-amber-500" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-amber-600">{lowStockCount}</div>
+                    <p className="mt-1 text-xs text-muted-foreground">Requerem reposição imediata</p>
+                  </CardContent>
+                </Card>
+
+                <Card className={`glass ${ruptureCount > 0 ? "border-destructive/40 bg-destructive/5" : "border-border/60"}`}>
+                  <CardHeader className="flex flex-row items-center justify-between pb-2">
+                    <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                      Itens Zerados (Ruptura)
+                    </CardTitle>
+                    <AlertOctagon className={`h-4 w-4 ${ruptureCount > 0 ? "text-destructive" : "text-muted-foreground"}`} />
+                  </CardHeader>
+                  <CardContent>
+                    <div className={`text-2xl font-bold ${ruptureCount > 0 ? "text-destructive" : "text-foreground"}`}>
+                      {ruptureCount}
+                    </div>
+                    <p className="mt-1 text-xs text-muted-foreground">Paralisação potencial de vendas/produção</p>
+                  </CardContent>
+                </Card>
+
+                <Card className="glass border-border/60">
+                  <CardHeader className="flex flex-row items-center justify-between pb-2">
+                    <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                      Custo Estimado de Reposição
+                    </CardTitle>
+                    <TrendingDown className="h-4 w-4 text-primary" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-foreground">
+                      {formatBRL(totalReplenishmentCost)}
+                    </div>
+                    <p className="mt-1 text-xs text-muted-foreground">Para atingir margem de segurança</p>
+                  </CardContent>
+                </Card>
+              </div>
+
+              <Card className="glass border border-border/60">
+                <CardHeader className="flex flex-row items-center justify-between pb-3">
+                  <div>
+                    <CardTitle className="text-base font-semibold">Tabela de Reposição Sugerida</CardTitle>
+                    <p className="text-xs text-muted-foreground">
+                      Calcula o déficit contra o estoque mínimo e sugere lote ideal de compra (2x estoque mínimo).
+                    </p>
+                  </div>
+                  <Button
+                    variant="hero"
+                    size="sm"
+                    className="gap-1.5"
+                    onClick={() => navigate("/compras")}
+                  >
+                    Novo Pedido de Compra
+                    <ArrowRight className="h-4 w-4" />
+                  </Button>
+                </CardHeader>
+                <CardContent className="p-0">
+                  {criticalItems.length === 0 ? (
+                    <div className="py-12 text-center">
+                      <p className="text-sm font-medium text-emerald-600">
+                        Nenhum item em estado crítico! Todos os produtos estão acima do estoque mínimo.
+                      </p>
+                    </div>
+                  ) : (
+                    <ScrollArea className="max-h-[460px]">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Produto</TableHead>
+                            <TableHead>Categoria</TableHead>
+                            <TableHead className="text-center">Estoque Atual</TableHead>
+                            <TableHead className="text-center">Estoque Mínimo</TableHead>
+                            <TableHead className="text-center">Déficit</TableHead>
+                            <TableHead className="text-center">Sugestão de Compra</TableHead>
+                            <TableHead className="text-right">Custo Estimado</TableHead>
+                            <TableHead className="text-right">Ações</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {criticalItems.map((p) => {
+                            const current = Number(p.current_stock);
+                            const min = Number(p.min_stock);
+                            const deficit = Math.max(0, min - current);
+                            const suggested = Math.max(0, min * 2 - current);
+                            const estCost = suggested * Number(p.price_cost ?? 0);
+
+                            return (
+                              <TableRow key={p.id}>
+                                <TableCell className="font-semibold">
+                                  {p.name}
+                                  {current <= 0 && (
+                                    <Badge variant="destructive" className="ml-2 text-[10px]">
+                                      Zerado
+                                    </Badge>
+                                  )}
+                                </TableCell>
+                                <TableCell className="text-xs text-muted-foreground">
+                                  {p.category ?? "-"}
+                                </TableCell>
+                                <TableCell className="text-center font-bold text-destructive">
+                                  {current} {p.unit}
+                                </TableCell>
+                                <TableCell className="text-center text-muted-foreground">
+                                  {min} {p.unit}
+                                </TableCell>
+                                <TableCell className="text-center font-medium text-amber-600">
+                                  +{deficit} {p.unit}
+                                </TableCell>
+                                <TableCell className="text-center">
+                                  <Badge variant="outline" className="border-primary/40 text-primary font-bold">
+                                    {suggested} {p.unit}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell className="text-right font-medium">
+                                  {formatBRL(estCost)}
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  <div className="flex justify-end gap-1.5">
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      onClick={() => setEditProduct(p)}
+                                      title="Ajustar saldo manualmente"
+                                    >
+                                      Ajustar
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="secondary"
+                                      onClick={() => navigate("/compras")}
+                                      title="Comprar com fornecedor"
+                                    >
+                                      Comprar
+                                    </Button>
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
+                    </ScrollArea>
+                  )}
+                </CardContent>
+              </Card>
             </TabsContent>
 
             {/* ABA HISTÓRICO DE MOVIMENTAÇÕES */}

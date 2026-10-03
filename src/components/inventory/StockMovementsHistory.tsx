@@ -13,7 +13,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { supabase } from "@/integrations/supabase/client";
 import { exportToCsv } from "@/lib/exportCsv";
-import { toast } from "sonner";
+import { useOrganization } from "@/contexts/OrganizationContext";
 
 export type StockMovementRow = {
   id: string;
@@ -31,8 +31,8 @@ export type StockMovementRow = {
   } | null;
 };
 
-async function fetchStockMovements(): Promise<StockMovementRow[]> {
-  const { data, error } = await supabase
+async function fetchStockMovements(orgId?: string): Promise<StockMovementRow[]> {
+  let query = supabase
     .from("stock_movements")
     .select(`
       id,
@@ -52,14 +52,19 @@ async function fetchStockMovements(): Promise<StockMovementRow[]> {
     .order("created_at", { ascending: false })
     .limit(250);
 
+  if (orgId) query = query.eq("organization_id", orgId);
+  const { data, error } = await query;
+
   if (error) throw error;
   return (data ?? []) as any;
 }
 
 export function StockMovementsHistory() {
+  const { currentOrg } = useOrganization();
   const { data, isLoading, error, refetch, isFetching } = useQuery({
-    queryKey: ["stock_movements", "audit"],
-    queryFn: fetchStockMovements,
+    queryKey: ["stock_movements", "audit", currentOrg?.id],
+    queryFn: () => fetchStockMovements(currentOrg?.id),
+    enabled: Boolean(currentOrg?.id),
   });
 
   const [search, setSearch] = React.useState("");

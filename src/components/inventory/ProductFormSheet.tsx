@@ -22,6 +22,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import type { ProductType } from "@/types/inventory";
+import { useOrganization } from "@/contexts/OrganizationContext";
 
 function normalizeName(name: string) {
   return String(name ?? "")
@@ -78,6 +79,7 @@ export function ProductFormSheet({
   const [reactivateCandidate, setReactivateCandidate] = React.useState<{ id: string; name: string } | null>(null);
   const [pendingValues, setPendingValues] = React.useState<FormValues | null>(null);
   const qc = useQueryClient();
+  const { currentOrg } = useOrganization();
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -172,7 +174,10 @@ export function ProductFormSheet({
 
       const query = product
         ? supabase.from("products").update(payload).eq("id", product.id)
-        : supabase.from("products").insert(payload);
+        : (supabase.from("products") as any).insert({
+            ...payload,
+            organization_id: currentOrg?.id,
+          });
 
       const { error } = await query;
       if (error) throw error;
@@ -202,10 +207,16 @@ export function ProductFormSheet({
     // reforçar normalização no form para não “salvar diferente” do que verificou
     if (normalized !== normalizedValues.name) form.setValue("name", normalized, { shouldDirty: true });
 
-    const { data, error } = await supabase
+    let dupQuery = supabase
       .from("products")
       .select("id,name,status,created_at")
-      .ilike("name", normalized)
+      .ilike("name", normalized);
+
+    if (currentOrg?.id) {
+      dupQuery = dupQuery.eq("organization_id", currentOrg.id);
+    }
+
+    const { data, error } = await dupQuery
       .order("created_at", { ascending: false })
       .limit(5);
     if (error) {

@@ -30,6 +30,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { isForeignKeyViolation, toastDeleteBlocked } from "@/lib/supabaseErrors";
+import { useOrganization } from "@/contexts/OrganizationContext";
 
 type FinishedProductRow = { id: string; name: string };
 type ManufacturingOrderRow = {
@@ -53,30 +54,45 @@ function statusBadge(status: string | null) {
   return <Badge variant="outline">{status ?? "—"}</Badge>;
 }
 
-async function fetchMOs(): Promise<ManufacturingOrderRow[]> {
-  const { data, error } = await supabase
+async function fetchMOs(orgId?: string): Promise<ManufacturingOrderRow[]> {
+  let query = supabase
     .from("manufacturing_orders")
     .select("id,created_at,code,product_id,quantity,status,start_date,end_date,products(name)")
     .order("created_at", { ascending: false });
+
+  if (orgId) query = query.eq("organization_id", orgId);
+  const { data, error } = await query;
   if (error) throw error;
   return (data ?? []) as any;
 }
 
-async function fetchFinishedProducts(): Promise<FinishedProductRow[]> {
-  const { data, error } = await supabase
+async function fetchFinishedProducts(orgId?: string): Promise<FinishedProductRow[]> {
+  let query = supabase
     .from("products")
     .select("id,name")
     .eq("status", "Ativo")
     .eq("type", "Produto Final")
     .order("name", { ascending: true });
+
+  if (orgId) query = query.eq("organization_id", orgId);
+  const { data, error } = await query;
   if (error) throw error;
   return (data ?? []) as any;
 }
 
 export default function Producao() {
   const qc = useQueryClient();
-  const { data, isLoading, error } = useQuery({ queryKey: ["manufacturing_orders"], queryFn: fetchMOs });
-  const { data: finished } = useQuery({ queryKey: ["products", "finished"], queryFn: fetchFinishedProducts });
+  const { currentOrg } = useOrganization();
+  const { data, isLoading, error } = useQuery({
+    queryKey: ["manufacturing_orders", currentOrg?.id],
+    queryFn: () => fetchMOs(currentOrg?.id),
+    enabled: Boolean(currentOrg?.id),
+  });
+  const { data: finished } = useQuery({
+    queryKey: ["products", "finished", currentOrg?.id],
+    queryFn: () => fetchFinishedProducts(currentOrg?.id),
+    enabled: Boolean(currentOrg?.id),
+  });
 
   const [q, setQ] = React.useState("");
   const [open, setOpen] = React.useState(false);
@@ -120,7 +136,6 @@ export default function Producao() {
     mutationFn: async () => {
       if (!productId) throw new Error("Selecione o produto final");
       if (!quantity || Number(quantity) <= 0) throw new Error("Quantidade inválida");
-      const today = new Date().toISOString().slice(0, 10);
       const { error } = await supabase.from("manufacturing_orders").insert({
         product_id: productId,
         quantity: Number(quantity),
@@ -128,6 +143,7 @@ export default function Producao() {
         start_date: null,
         end_date: null,
         created_at: new Date().toISOString(),
+        organization_id: currentOrg?.id,
       } as any);
       if (error) throw error;
     },

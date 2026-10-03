@@ -4,18 +4,21 @@ import {
   AlertTriangle,
   ArrowDownCircle,
   ArrowUpCircle,
+  BarChart3,
   Check,
   CheckCircle2,
   DollarSign,
   Download,
   Filter,
+  Layers,
   Pencil,
   Plus,
   Search,
   Trash2,
+  TrendingUp,
   Wallet,
 } from "lucide-react";
-import { endOfMonth, isBefore, isToday, parseISO, startOfDay, startOfMonth } from "date-fns";
+import { addMonths, endOfMonth, isBefore, isToday, parseISO, startOfDay, startOfMonth } from "date-fns";
 import { exportToCsv } from "@/lib/exportCsv";
 
 import { AppShell } from "@/components/layout/AppShell";
@@ -23,6 +26,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -44,6 +48,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { isForeignKeyViolation, toastDeleteBlocked } from "@/lib/supabaseErrors";
 import { formatBRL } from "@/lib/masks";
+import { useOrganization } from "@/contexts/OrganizationContext";
 
 type FinRow = {
   id: string;
@@ -58,18 +63,26 @@ type FinRow = {
   purchase_order_id?: string | null;
 };
 
-async function fetchFinancial(): Promise<FinRow[]> {
-  const { data, error } = await supabase
+async function fetchFinancial(orgId?: string): Promise<FinRow[]> {
+  let query = supabase
     .from("financial_records")
     .select("id,due_date,description,category,amount,status,type,payment_date,sale_id,purchase_order_id")
     .order("due_date", { ascending: false });
+
+  if (orgId) query = query.eq("organization_id", orgId);
+  const { data, error } = await query;
   if (error) throw error;
   return (data ?? []) as any;
 }
 
 export default function Financeiro() {
   const qc = useQueryClient();
-  const { data, isLoading, error } = useQuery({ queryKey: ["financial_records"], queryFn: fetchFinancial });
+  const { currentOrg } = useOrganization();
+  const { data, isLoading, error } = useQuery({
+    queryKey: ["financial_records", currentOrg?.id],
+    queryFn: () => fetchFinancial(currentOrg?.id),
+    enabled: Boolean(currentOrg?.id),
+  });
 
   // Estados de busca e filtros
   const [q, setQ] = React.useState("");
@@ -83,6 +96,10 @@ export default function Financeiro() {
   const [editing, setEditing] = React.useState<FinRow | null>(null);
 
   // Form de criação
+  const [mainTab, setMainTab] = React.useState<string>("extrato");
+  const [entryMode, setEntryMode] = React.useState<"single" | "installment" | "recurring">("single");
+  const [installmentCount, setInstallmentCount] = React.useState<number>(4);
+  const [recurringCount, setRecurringCount] = React.useState<number>(12);
   const [type, setType] = React.useState<string>("Receber");
   const [description, setDescription] = React.useState<string>("");
   const [category, setCategory] = React.useState<string>("");
@@ -139,6 +156,86 @@ export default function Financeiro() {
       saldoRealizado: totalRecebido - totalPago,
       vencidosValor,
       vencidosQtd,
+    };
+  }, [data, todayStr]);
+
+  // DRE Gerencial (Demonstrativo do Resultado do Exercício)
+  const dre = React.useMemo(() => {
+    const list = data ?? [];
+    let receitaBruta = 0;
+    let custosInsumos = 0;
+    let despesasOperacionais = 0;
+    const catMap = new Map<string, number>();
+
+    for (const r of list) {
+      if ((r.status ?? "").toLowerCase() === "cancelado") continue;
+      const val = Number(r.amount ?? 0);
+      const isRec = (r.type ?? "").toLowerCase() === "receber";
+      const cat = (r.category ?? "Geral").toUpperCase();
+
+      if (isRec) {
+        receitaBruta += val;
+      } else {
+        if (
+          cat.includes("MATÉRIA") ||
+          cat.includes("MATERIA") ||
+          cat.includes("INSUMO") ||
+          cat.includes("FORNECEDOR") ||
+          cat.includes("PRODUÇÃO")
+        ) {
+          custosInsumos += val;
+        } else {
+          despesasOperacionais += val;
+        }
+        catMap.set(cat, (catMap.get(cat) ?? 0) + val);
+      }
+    }
+
+    const lucroBruto = receitaBruta - custosInsumos;
+    const lucroLiquido = lucroBruto - despesasOperacionais;
+    const margemLiquida = receitaBruta > 0 ? (lucroLiquido / receitaBruta) * 100 : 0;
+
+    return {
+      receitaBruta,
+      custosInsumos,
+      lucroBruto,
+      despesasOperacionais,
+      lucroLiquido,
+      margemLiquida,
+      categories: Array.from(catMap.entries()).sort((a, b) => b[1] - a[1]),
+    };
+  }, [data]);
+
+  // Fluxo de Caixa Projetado (Próximos 7, 15, 30 e 60 dias)
+  const cashflow = React.useMemo(() => {
+    const list = data ?? [];
+    const now = new Date();
+    const d7 = new Date(now.getTime() + 7 * 86400000).toISOString().slice(0, 10);
+    const d15 = new Date(now.getTime() + 15 * 86400000).toISOString().slice(0, 10);
+    const d30 = new Date(now.getTime() + 30 * 86400000).toISOString().slice(0, 10);
+    const d60 = new Date(now.getTime() + 60 * 86400000).toISOString().slice(0, 10);
+
+    const calcBucket = (maxDate: string) => {
+      let ent = 0;
+      let sai = 0;
+      for (const r of list) {
+        if (
+          (r.status ?? "").toLowerCase() === "aberto" &&
+          r.due_date >= todayStr &&
+          r.due_date <= maxDate
+        ) {
+          if ((r.type ?? "").toLowerCase() === "receber") ent += Number(r.amount ?? 0);
+          else sai += Number(r.amount ?? 0);
+        }
+      }
+      return { entradas: ent, saidas: sai, saldo: ent - sai };
+    };
+
+    return {
+      d7: calcBucket(d7),
+      d15: calcBucket(d15),
+      d30: calcBucket(d30),
+      d60: calcBucket(d60),
     };
   }, [data, todayStr]);
 
@@ -212,19 +309,73 @@ export default function Financeiro() {
     mutationFn: async () => {
       if (!description.trim()) throw new Error("Informe a descrição");
       if (!amount || Number(amount) <= 0) throw new Error("Valor inválido");
-      const { error } = await supabase.from("financial_records").insert({
-        type,
-        description: description.trim(),
-        category: category.trim() || null,
-        amount: Number(amount),
-        due_date: dueDate,
-        status,
-        payment_date: status === "Pago" ? todayStr : null,
-      } as any);
+
+      const rows: any[] = [];
+      const baseDate = new Date(`${dueDate}T12:00:00`);
+
+      if (entryMode === "single") {
+        rows.push({
+          type,
+          description: description.trim(),
+          category: category.trim() || null,
+          amount: Number(amount),
+          due_date: dueDate,
+          status,
+          payment_date: status === "Pago" ? todayStr : null,
+          organization_id: currentOrg?.id,
+          installment_number: 1,
+          total_installments: 1,
+        });
+      } else if (entryMode === "installment") {
+        const count = Math.max(2, Math.min(48, Number(installmentCount || 2)));
+        const parcelVal = Number((Number(amount) / count).toFixed(2));
+
+        for (let i = 1; i <= count; i++) {
+          const pDueDate = addMonths(baseDate, i - 1).toISOString().slice(0, 10);
+          rows.push({
+            type,
+            description: `${description.trim()} (${i}/${count})`,
+            category: category.trim() || null,
+            amount: parcelVal,
+            due_date: pDueDate,
+            status: i === 1 && status === "Pago" ? "Pago" : "Aberto",
+            payment_date: i === 1 && status === "Pago" ? todayStr : null,
+            organization_id: currentOrg?.id,
+            installment_number: i,
+            total_installments: count,
+          });
+        }
+      } else if (entryMode === "recurring") {
+        const count = Math.max(2, Math.min(36, Number(recurringCount || 12)));
+
+        for (let i = 1; i <= count; i++) {
+          const pDueDate = addMonths(baseDate, i - 1).toISOString().slice(0, 10);
+          rows.push({
+            type,
+            description: `${description.trim()} (${i}/${count})`,
+            category: category.trim() || null,
+            amount: Number(amount),
+            due_date: pDueDate,
+            status: i === 1 && status === "Pago" ? "Pago" : "Aberto",
+            payment_date: i === 1 && status === "Pago" ? todayStr : null,
+            organization_id: currentOrg?.id,
+            installment_number: i,
+            total_installments: count,
+          });
+        }
+      }
+
+      const { error } = await supabase.from("financial_records").insert(rows as any);
       if (error) throw error;
     },
     onSuccess: async () => {
-      toast.success("Lançamento criado com sucesso!");
+      const msg =
+        entryMode === "installment"
+          ? `${installmentCount} parcelas geradas com sucesso!`
+          : entryMode === "recurring"
+          ? `${recurringCount} lançamentos recorrentes gerados!`
+          : "Lançamento criado com sucesso!";
+      toast.success(msg);
       setOpen(false);
       setDescription("");
       setCategory("");
@@ -232,6 +383,9 @@ export default function Financeiro() {
       setDueDate(todayStr);
       setStatus("Aberto");
       setType("Receber");
+      setEntryMode("single");
+      setInstallmentCount(4);
+      setRecurringCount(12);
       await qc.invalidateQueries({ queryKey: ["financial_records"] });
     },
     onError: (e: any) => toast.error(e?.message ?? "Erro ao criar lançamento"),
@@ -412,7 +566,7 @@ export default function Financeiro() {
                     <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
                   </div>
                   <div className="grid gap-2">
-                    <Label>Valor (R$) *</Label>
+                    <Label>{entryMode === "installment" ? "Valor Total (R$) *" : "Valor (R$) *"}</Label>
                     <Input
                       type="number"
                       min={0}
@@ -421,6 +575,101 @@ export default function Financeiro() {
                       onChange={(e) => setAmount(Number(e.target.value))}
                     />
                   </div>
+                </div>
+
+                {/* Condição de Pagamento / Parcelamento */}
+                <div className="rounded-lg border bg-muted/20 p-3 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                      Condição de Pagamento
+                    </Label>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={entryMode === "single" ? "soft" : "ghost"}
+                        onClick={() => setEntryMode("single")}
+                        className="h-6 text-[11px] px-2"
+                      >
+                        Único
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={entryMode === "installment" ? "soft" : "ghost"}
+                        onClick={() => setEntryMode("installment")}
+                        className="h-6 text-[11px] px-2"
+                      >
+                        Parcelado
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={entryMode === "recurring" ? "soft" : "ghost"}
+                        onClick={() => setEntryMode("recurring")}
+                        className="h-6 text-[11px] px-2"
+                      >
+                        Recorrente
+                      </Button>
+                    </div>
+                  </div>
+
+                  {entryMode === "installment" && (
+                    <div className="rounded-md bg-background/80 p-2.5 text-xs space-y-2 border">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-muted-foreground font-medium">Quantidade de Parcelas:</span>
+                        <Select
+                          value={String(installmentCount)}
+                          onValueChange={(v) => setInstallmentCount(Number(v))}
+                        >
+                          <SelectTrigger className="h-7 w-20 text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {[2, 3, 4, 5, 6, 8, 10, 12, 18, 24].map((n) => (
+                              <SelectItem key={n} value={String(n)}>
+                                {n}x
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground leading-relaxed">
+                        Serão geradas <strong>{installmentCount} parcelas mensais</strong> de{" "}
+                        <span className="font-semibold text-primary">
+                          {formatBRL(amount > 0 ? amount / installmentCount : 0)}
+                        </span>{" "}
+                        com vencimentos mês a mês.
+                      </p>
+                    </div>
+                  )}
+
+                  {entryMode === "recurring" && (
+                    <div className="rounded-md bg-background/80 p-2.5 text-xs space-y-2 border">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-muted-foreground font-medium">Repetir por:</span>
+                        <Select
+                          value={String(recurringCount)}
+                          onValueChange={(v) => setRecurringCount(Number(v))}
+                        >
+                          <SelectTrigger className="h-7 w-24 text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {[3, 6, 12, 24].map((n) => (
+                              <SelectItem key={n} value={String(n)}>
+                                {n} meses
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground leading-relaxed">
+                        Serão gerados <strong>{recurringCount} lançamentos mensais fixos</strong> de{" "}
+                        <span className="font-semibold text-primary">{formatBRL(amount)}</span> cada.
+                      </p>
+                    </div>
+                  )}
                 </div>
 
                 <div className="grid gap-2">
@@ -516,8 +765,25 @@ export default function Financeiro() {
           </Card>
         </div>
 
-        {/* BARRA DE FILTROS */}
-        <Card className="glass p-3 border border-border/60">
+        <Tabs value={mainTab} onValueChange={setMainTab} className="mt-6">
+          <TabsList className="grid w-full grid-cols-3 sm:w-[480px]">
+            <TabsTrigger value="extrato" className="gap-2 text-xs">
+              <Wallet className="h-4 w-4" />
+              Lançamentos
+            </TabsTrigger>
+            <TabsTrigger value="dre" className="gap-2 text-xs">
+              <BarChart3 className="h-4 w-4" />
+              DRE Gerencial
+            </TabsTrigger>
+            <TabsTrigger value="fluxo" className="gap-2 text-xs">
+              <TrendingUp className="h-4 w-4" />
+              Fluxo Projetado
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="extrato" className="mt-4 space-y-4">
+            {/* BARRA DE FILTROS */}
+            <Card className="glass p-3 border border-border/60">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div className="relative flex-1 max-w-sm">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -727,7 +993,196 @@ export default function Financeiro() {
               </ScrollArea>
             </Card>
           )}
-        </div>
+          </div>
+        </TabsContent>
+
+          {/* DRE GERENCIAL */}
+          <TabsContent value="dre" className="mt-4 space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <Card className="glass border-emerald-500/20 bg-emerald-500/5">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    (+) Receita Operacional
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-xl font-bold text-emerald-600">
+                    {formatBRL(dre.receitaBruta)}
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">Total de vendas e faturamento</p>
+                </CardContent>
+              </Card>
+
+              <Card className="glass border-rose-500/20 bg-rose-500/5">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    (-) Custos / Insumos (CMV)
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-xl font-bold text-rose-600">
+                    {formatBRL(dre.custosInsumos)}
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">Matérias-primas e embalagens</p>
+                </CardContent>
+              </Card>
+
+              <Card className="glass border-amber-500/20 bg-amber-500/5">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    (-) Despesas Operacionais
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-xl font-bold text-amber-600">
+                    {formatBRL(dre.despesasOperacionais)}
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">Fixas, administrativas e logística</p>
+                </CardContent>
+              </Card>
+
+              <Card className={`glass ${dre.lucroLiquido >= 0 ? "border-emerald-500/30 bg-emerald-500/10" : "border-destructive/30 bg-destructive/10"}`}>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    (=) Lucro Líquido
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className={`text-xl font-bold ${dre.lucroLiquido >= 0 ? "text-emerald-600" : "text-destructive"}`}>
+                    {formatBRL(dre.lucroLiquido)}
+                  </div>
+                  <p className="mt-1 text-xs font-medium text-muted-foreground">
+                    Margem Líquida: {dre.margemLiquida.toFixed(1)}%
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Tabela Demonstrativa */}
+            <Card className="glass p-5 border border-border/60">
+              <h3 className="text-sm font-semibold mb-4 flex items-center gap-2">
+                <BarChart3 className="h-4 w-4 text-primary" />
+                Demonstrativo de Resultado do Exercício (Visão Gerencial)
+              </h3>
+              <div className="space-y-3 text-sm">
+                <div className="flex justify-between items-center py-2 border-b border-border/40 font-semibold">
+                  <span className="text-foreground">1. Receita Operacional Bruta</span>
+                  <span className="text-emerald-600">{formatBRL(dre.receitaBruta)}</span>
+                </div>
+                <div className="flex justify-between items-center py-2 border-b border-border/40 text-muted-foreground pl-4">
+                  <span>(-) Custos de Mercadorias e Insumos (CMV)</span>
+                  <span className="text-rose-600">({formatBRL(dre.custosInsumos)})</span>
+                </div>
+                <div className="flex justify-between items-center py-2 border-b border-border/40 font-medium pl-2 bg-muted/20 px-2 rounded">
+                  <span>(=) Lucro Bruto Operacional</span>
+                  <span className={dre.lucroBruto >= 0 ? "text-emerald-600" : "text-destructive"}>
+                    {formatBRL(dre.lucroBruto)}
+                  </span>
+                </div>
+                <div className="py-2 border-b border-border/40 space-y-1.5 pl-4">
+                  <div className="flex justify-between items-center font-medium text-foreground">
+                    <span>(-) Despesas Operacionais por Categoria</span>
+                    <span className="text-amber-600">({formatBRL(dre.despesasOperacionais)})</span>
+                  </div>
+                  {dre.categories.length === 0 ? (
+                    <p className="text-xs text-muted-foreground italic pl-2">Nenhuma categoria registrada</p>
+                  ) : (
+                    dre.categories.map(([cat, val]) => (
+                      <div key={cat} className="flex justify-between items-center text-xs text-muted-foreground pl-4">
+                        <span>• {cat}</span>
+                        <span>{formatBRL(val)}</span>
+                      </div>
+                    ))
+                  )}
+                </div>
+                <div className="flex justify-between items-center py-3 border-t-2 border-border font-bold text-base">
+                  <span>(=) RESULTADO LÍQUIDO DO PERÍODO</span>
+                  <span className={dre.lucroLiquido >= 0 ? "text-emerald-600" : "text-destructive"}>
+                    {formatBRL(dre.lucroLiquido)}
+                  </span>
+                </div>
+              </div>
+            </Card>
+          </TabsContent>
+
+          {/* FLUXO PROJETADO */}
+          <TabsContent value="fluxo" className="mt-4 space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              {[
+                { label: "Próximos 7 Dias", data: cashflow.d7 },
+                { label: "Próximos 15 Dias", data: cashflow.d15 },
+                { label: "Próximos 30 Dias", data: cashflow.d30 },
+                { label: "Próximos 60 Dias", data: cashflow.d60 },
+              ].map((item, idx) => (
+                <Card key={idx} className="glass border-border/60">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                      {item.label}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-1.5">
+                    <div className="flex justify-between text-xs">
+                      <span className="text-emerald-600">Entradas:</span>
+                      <span className="font-semibold text-emerald-600">+{formatBRL(item.data.entradas)}</span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-rose-600">Saídas:</span>
+                      <span className="font-semibold text-rose-600">-{formatBRL(item.data.saidas)}</span>
+                    </div>
+                    <div className="border-t border-border/40 pt-1.5 flex justify-between text-sm font-bold">
+                      <span>Saldo Previsto:</span>
+                      <span className={item.data.saldo >= 0 ? "text-emerald-600" : "text-destructive"}>
+                        {formatBRL(item.data.saldo)}
+                      </span>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+
+            {/* Tabela de Previsão de Contas a Vencer */}
+            <Card className="glass border border-border/60">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                  <TrendingUp className="h-4 w-4 text-primary" />
+                  Próximos Títulos a Vencer (Em Aberto)
+                </CardTitle>
+              </CardHeader>
+              <ScrollArea className="max-h-[380px]">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Vencimento</TableHead>
+                      <TableHead>Tipo</TableHead>
+                      <TableHead>Descrição</TableHead>
+                      <TableHead>Categoria</TableHead>
+                      <TableHead className="text-right">Valor</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {data?.filter(r => (r.status ?? "").toLowerCase() === "aberto" && r.due_date >= todayStr)
+                      .slice(0, 20)
+                      .map(r => (
+                        <TableRow key={r.id}>
+                          <TableCell className="font-medium">{r.due_date.split("-").reverse().join("/")}</TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className={r.type.toLowerCase() === "receber" ? "border-emerald-500/30 text-emerald-600" : "border-rose-500/30 text-rose-600"}>
+                              {r.type.toLowerCase() === "receber" ? "Receber" : "Pagar"}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>{r.description}</TableCell>
+                          <TableCell className="text-muted-foreground text-xs">{r.category ?? "-"}</TableCell>
+                          <TableCell className={`text-right font-semibold ${r.type.toLowerCase() === "receber" ? "text-emerald-600" : "text-rose-600"}`}>
+                            {formatBRL(r.amount)}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                  </TableBody>
+                </Table>
+              </ScrollArea>
+            </Card>
+          </TabsContent>
+        </Tabs>
 
         {/* DIÁLOGO DE EDIÇÃO */}
         <Dialog open={editOpen} onOpenChange={setEditOpen}>

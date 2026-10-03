@@ -23,6 +23,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { exportToCsv } from "@/lib/exportCsv";
+import { useOrganization } from "@/contexts/OrganizationContext";
 
 function formatBRL(value: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
@@ -35,16 +36,23 @@ function formatMonthLabel(d: Date) {
 
 type SalesMonthPoint = { month: string; total: number };
 
-async function fetchSalesByMonthLast6(): Promise<SalesMonthPoint[]> {
+async function fetchSalesByMonthLast6(orgId?: string): Promise<SalesMonthPoint[]> {
+  if (!orgId) return [];
   const now = new Date();
   const start = startOfMonth(addMonths(now, -5)).toISOString();
   const end = endOfMonth(now).toISOString();
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("sales")
     .select("total_amount,created_at,status")
     .gte("created_at", start)
     .lte("created_at", end);
+
+  if (orgId) {
+    query = query.eq("organization_id", orgId);
+  }
+
+  const { data, error } = await query;
   if (error) throw error;
 
   const rows = (data ?? []) as Array<{ total_amount: number | null; created_at: string; status: string | null }>;
@@ -70,8 +78,13 @@ async function fetchSalesByMonthLast6(): Promise<SalesMonthPoint[]> {
 
 type PurchaseStatusSlice = { name: string; value: number };
 
-async function fetchPurchaseStatus(): Promise<PurchaseStatusSlice[]> {
-  const { data, error } = await supabase.from("purchase_orders").select("status");
+async function fetchPurchaseStatus(orgId?: string): Promise<PurchaseStatusSlice[]> {
+  if (!orgId) return [];
+  let query = supabase.from("purchase_orders").select("status");
+  if (orgId) {
+    query = query.eq("organization_id", orgId);
+  }
+  const { data, error } = await query;
   if (error) throw error;
 
   const rows = (data ?? []) as Array<{ status: string | null }>;
@@ -95,12 +108,18 @@ async function fetchPurchaseStatus(): Promise<PurchaseStatusSlice[]> {
 
 type CurveAItem = { product_id: string; product_name: string; total_value: number };
 
-async function fetchCurveA(): Promise<CurveAItem[]> {
-  const { data, error } = await supabase
+async function fetchCurveA(orgId?: string): Promise<CurveAItem[]> {
+  if (!orgId) return [];
+  let query = supabase
     .from("sale_items")
-    // tentamos enriquecer com nomes e status; se o PostgREST não retornar, seguimos com o que vier.
-    .select("product_id,total,quantity,products(name),sales(status)")
+    .select("product_id,total,quantity,products(name),sales(status,organization_id)")
     .limit(1000);
+
+  if (orgId) {
+    query = query.eq("organization_id", orgId);
+  }
+
+  const { data, error } = await query;
   if (error) throw error;
 
   const rows = (data ?? []) as any[];
@@ -130,9 +149,24 @@ async function fetchCurveA(): Promise<CurveAItem[]> {
 const PIE_COLORS = ["hsl(var(--primary))", "hsl(var(--primary-glow))", "hsl(var(--muted-foreground))"];
 
 export default function Relatorios() {
-  const salesQ = useQuery({ queryKey: ["reports", "sales-by-month"], queryFn: fetchSalesByMonthLast6 });
-  const poQ = useQuery({ queryKey: ["reports", "purchase-status"], queryFn: fetchPurchaseStatus });
-  const curveQ = useQuery({ queryKey: ["reports", "curve-a"], queryFn: fetchCurveA });
+  const { currentOrg } = useOrganization();
+  const orgId = currentOrg?.id;
+
+  const salesQ = useQuery({
+    queryKey: ["reports", "sales-by-month", orgId],
+    queryFn: () => fetchSalesByMonthLast6(orgId),
+    enabled: Boolean(orgId),
+  });
+  const poQ = useQuery({
+    queryKey: ["reports", "purchase-status", orgId],
+    queryFn: () => fetchPurchaseStatus(orgId),
+    enabled: Boolean(orgId),
+  });
+  const curveQ = useQuery({
+    queryKey: ["reports", "curve-a", orgId],
+    queryFn: () => fetchCurveA(orgId),
+    enabled: Boolean(orgId),
+  });
 
   const hasAnyError = salesQ.error || poQ.error || curveQ.error;
 

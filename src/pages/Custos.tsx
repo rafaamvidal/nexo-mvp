@@ -14,6 +14,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
+import { useOrganization } from "@/contexts/OrganizationContext";
+
 type ProductCostRow = {
   id: string;
   name: string;
@@ -33,13 +35,16 @@ function parseBRNumber(input: string) {
   return Number.isFinite(value) ? value : NaN;
 }
 
-async function fetchFinishedProducts(): Promise<ProductCostRow[]> {
-  const { data, error } = await supabase
+async function fetchFinishedProducts(orgId?: string): Promise<ProductCostRow[]> {
+  let query = supabase
     .from("products")
     .select("id,name,price_cost,price_sale,status,type")
     .eq("type", "Produto Final")
     .eq("status", "Ativo")
     .order("name", { ascending: true });
+
+  if (orgId) query = query.eq("organization_id", orgId);
+  const { data, error } = await query;
   if (error) throw error;
   return (data ?? []) as any;
 }
@@ -61,7 +66,12 @@ function marginClass(margin: number | null, hasCost: boolean) {
 
 export default function Custos() {
   const qc = useQueryClient();
-  const { data, isLoading, error } = useQuery({ queryKey: ["costs", "products"], queryFn: fetchFinishedProducts });
+  const { currentOrg } = useOrganization();
+  const { data, isLoading, error } = useQuery({
+    queryKey: ["costs", "products", currentOrg?.id],
+    queryFn: () => fetchFinishedProducts(currentOrg?.id),
+    enabled: Boolean(currentOrg?.id),
+  });
 
   const rows = React.useMemo(() => {
     return (data ?? []).map((p) => {

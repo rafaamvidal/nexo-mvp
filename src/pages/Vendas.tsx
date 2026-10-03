@@ -28,6 +28,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { isForeignKeyViolation, toastDeleteBlocked } from "@/lib/supabaseErrors";
+import { useOrganization } from "@/contexts/OrganizationContext";
 
 function formatBRL(value: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
@@ -69,6 +70,7 @@ async function upsertReceberForSale(params: {
   clientName: string | null;
   amount: number;
   nextStatus: string;
+  orgId?: string;
 }) {
   const dueDate = new Date().toISOString().slice(0, 10);
   const { data: existing, error: selErr } = await supabase
@@ -92,6 +94,7 @@ async function upsertReceberForSale(params: {
     amount: Number(params.amount),
     due_date: dueDate,
     status: nextFinStatus,
+    organization_id: params.orgId,
   };
 
   if (existing?.id) {
@@ -103,27 +106,34 @@ async function upsertReceberForSale(params: {
   }
 }
 
-async function fetchSales(): Promise<SaleRow[]> {
-  const { data, error } = await supabase
+async function fetchSales(orgId?: string): Promise<SaleRow[]> {
+  let query = supabase
     .from("sales")
     .select("id,created_at,code,status,total_amount,client_id,clients(name)")
     .order("created_at", { ascending: false });
+
+  if (orgId) query = query.eq("organization_id", orgId);
+  const { data, error } = await query;
   if (error) throw error;
   return (data ?? []) as any;
 }
 
-async function fetchClients(): Promise<ClientRow[]> {
-  const { data, error } = await supabase.from("clients").select("id,name").order("name", { ascending: true });
+async function fetchClients(orgId?: string): Promise<ClientRow[]> {
+  let query = supabase.from("clients").select("id,name").order("name", { ascending: true });
+  if (orgId) query = query.eq("organization_id", orgId);
+  const { data, error } = await query;
   if (error) throw error;
   return (data ?? []) as any;
 }
 
-async function fetchProductsForSale(): Promise<ProductRowLite[]> {
-  const { data, error } = await supabase
+async function fetchProductsForSale(orgId?: string): Promise<ProductRowLite[]> {
+  let query = supabase
     .from("products")
     .select("id,name,price_sale")
     .eq("status", "Ativo")
     .order("name", { ascending: true });
+  if (orgId) query = query.eq("organization_id", orgId);
+  const { data, error } = await query;
   if (error) throw error;
   return (data ?? []) as any;
 }
@@ -132,10 +142,23 @@ type SaleItemDraft = { product_id: string; quantity: number };
 
 export default function Vendas() {
   const qc = useQueryClient();
-  const { data, isLoading, error } = useQuery({ queryKey: ["sales"], queryFn: fetchSales });
+  const { currentOrg } = useOrganization();
+  const { data, isLoading, error } = useQuery({
+    queryKey: ["sales", currentOrg?.id],
+    queryFn: () => fetchSales(currentOrg?.id),
+    enabled: Boolean(currentOrg?.id),
+  });
 
-  const { data: clients } = useQuery({ queryKey: ["clients"], queryFn: fetchClients });
-  const { data: products } = useQuery({ queryKey: ["products", "for-sale"], queryFn: fetchProductsForSale });
+  const { data: clients } = useQuery({
+    queryKey: ["clients", currentOrg?.id],
+    queryFn: () => fetchClients(currentOrg?.id),
+    enabled: Boolean(currentOrg?.id),
+  });
+  const { data: products } = useQuery({
+    queryKey: ["products", "for-sale", currentOrg?.id],
+    queryFn: () => fetchProductsForSale(currentOrg?.id),
+    enabled: Boolean(currentOrg?.id),
+  });
 
   const [q, setQ] = React.useState("");
   const [open, setOpen] = React.useState(false);
@@ -192,13 +215,23 @@ export default function Vendas() {
       if (!editingSaleId) {
         const { data: saleInserted, error: saleErr } = await supabase
           .from("sales")
-          .insert({ client_id: clientId, status, total_amount: total, gross_amount: total } as any)
+          .insert({
+            client_id: clientId,
+            status,
+            total_amount: total,
+            gross_amount: total,
+            organization_id: currentOrg?.id,
+          } as any)
           .select("id")
           .single();
         if (saleErr) throw saleErr;
 
         const saleId = (saleInserted as any).id as string;
-        const { error: itemsErr } = await supabase.from("sale_items").insert(computeItemsPayload(saleId, validItems) as any);
+        const itemsPayload = computeItemsPayload(saleId, validItems).map((it) => ({
+          ...it,
+          organization_id: currentOrg?.id,
+        }));
+        const { error: itemsErr } = await supabase.from("sale_items").insert(itemsPayload as any);
         if (itemsErr) throw itemsErr;
 
         // Estoque: só baixa em Faturado/Entregue
@@ -208,7 +241,7 @@ export default function Vendas() {
 
         // Financeiro: Faturado/Entregue cria/atualiza Receber
         if (isStockMovingSaleStatus(status)) {
-          await upsertReceberForSale({ saleId, clientName, amount: Number(total), nextStatus: status });
+          await upsertReceberForSale({ saleId, clientName, amount: Number(total), nextStatus: status, orgId: currentOrg?.id });
         }
       } else {
         const saleId = editingSaleId;

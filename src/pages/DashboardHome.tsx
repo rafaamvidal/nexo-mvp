@@ -73,39 +73,42 @@ function isWithinRange(iso: string | null | undefined, startIso: string, endIso:
   return iso >= startIso && iso <= endIso;
 }
 
-async function fetchDashboardData(): Promise<DashboardData> {
+async function fetchDashboardData(orgId?: string): Promise<DashboardData> {
   const start = startOfMonth(new Date()).toISOString();
   const end = endOfMonth(new Date()).toISOString();
   const start30 = startOfDay(subDays(new Date(), 29)).toISOString();
   const todayStr = new Date().toISOString().slice(0, 10);
 
+  let pQuery = supabase.from("products").select("id,status,category", { count: "exact" });
+  let moQuery = supabase.from("manufacturing_orders").select("id,status", { count: "exact" });
+  let salesQuery = supabase.from("sales").select("total_amount,created_at").gte("created_at", start).lte("created_at", end);
+  let finQuery = supabase.from("financial_records").select("amount,type,due_date").gte("due_date", start.slice(0, 10)).lte("due_date", end.slice(0, 10));
+  let itemsQuery = supabase.from("sale_items").select("total, products(name), sales(created_at)");
+  let sales30Query = supabase.from("sales").select("total_amount,created_at").gte("created_at", start30).lte("created_at", new Date().toISOString());
+  let allProdsQuery = supabase.from("products").select("id,name,current_stock,min_stock,unit,status").eq("status", "Ativo");
+  let urgentFinQuery = supabase.from("financial_records").select("id,description,amount,due_date,type").eq("status", "Aberto").lte("due_date", todayStr).order("due_date", { ascending: true }).limit(10);
+
+  if (orgId) {
+    pQuery = pQuery.eq("organization_id", orgId);
+    moQuery = moQuery.eq("organization_id", orgId);
+    salesQuery = salesQuery.eq("organization_id", orgId);
+    finQuery = finQuery.eq("organization_id", orgId);
+    itemsQuery = itemsQuery.eq("organization_id", orgId);
+    sales30Query = sales30Query.eq("organization_id", orgId);
+    allProdsQuery = allProdsQuery.eq("organization_id", orgId);
+    urgentFinQuery = urgentFinQuery.eq("organization_id", orgId);
+  }
+
   const [productsRes, moRes, salesRes, finRes, saleItemsRes, sales30Res, allProductsRes, urgentFinRes] =
     await Promise.all([
-      supabase.from("products").select("id,status,category", { count: "exact" }),
-      supabase.from("manufacturing_orders").select("id,status", { count: "exact" }),
-      supabase.from("sales").select("total_amount,created_at").gte("created_at", start).lte("created_at", end),
-      supabase
-        .from("financial_records")
-        .select("amount,type,due_date")
-        .gte("due_date", start.slice(0, 10))
-        .lte("due_date", end.slice(0, 10)),
-      supabase.from("sale_items").select("total, products(name), sales(created_at)"),
-      supabase
-        .from("sales")
-        .select("total_amount,created_at")
-        .gte("created_at", start30)
-        .lte("created_at", new Date().toISOString()),
-      supabase
-        .from("products")
-        .select("id,name,current_stock,min_stock,unit,status")
-        .eq("status", "Ativo"),
-      supabase
-        .from("financial_records")
-        .select("id,description,amount,due_date,type")
-        .eq("status", "Aberto")
-        .lte("due_date", todayStr)
-        .order("due_date", { ascending: true })
-        .limit(10),
+      pQuery,
+      moQuery,
+      salesQuery,
+      finQuery,
+      itemsQuery,
+      sales30Query,
+      allProdsQuery,
+      urgentFinQuery,
     ]);
 
   if (productsRes.error) throw productsRes.error;
@@ -206,7 +209,7 @@ export default function DashboardHome() {
   const { currentOrg, organizations, isLoading: isOrgLoading, openSetupModal } = useOrganization();
   const { data, isLoading, error } = useQuery({
     queryKey: ["dashboard", currentOrg?.id],
-    queryFn: fetchDashboardData,
+    queryFn: () => fetchDashboardData(currentOrg?.id),
     enabled: Boolean(currentOrg?.id),
   });
   const todayStr = new Date().toISOString().slice(0, 10);

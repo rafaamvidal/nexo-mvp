@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Package, Pencil, RefreshCw, Search, Trash2, TrendingUp } from "lucide-react";
+import { AlertTriangle, ChefHat, Package, Pencil, RefreshCw, Search, Trash2, TrendingUp } from "lucide-react";
 
 import { AppShell } from "@/components/layout/AppShell";
 import { Badge } from "@/components/ui/badge";
@@ -10,6 +10,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { supabase } from "@/integrations/supabase/client";
 import type { ProductRow, ProductType } from "@/types/inventory";
 import { ProductFormSheet, type EditableProduct } from "@/components/inventory/ProductFormSheet";
+import { BomManagerDialog } from "@/components/production/BomManagerDialog";
+import { SpreadsheetDataImporter } from "@/components/organization/SpreadsheetDataImporter";
 import { StockQuickAdjust } from "@/components/inventory/StockQuickAdjust";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
@@ -42,11 +44,19 @@ function formatBRL(value: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
 }
 
-async function fetchProducts(): Promise<Product[]> {
-  const { data, error } = await supabase
+import { useOrganization } from "@/contexts/OrganizationContext";
+
+async function fetchProducts(orgId?: string): Promise<Product[]> {
+  let query = supabase
     .from("products")
     .select("id,name,type,category,current_stock,min_stock,unit,price_cost,price_sale,created_at,status")
     .order("name", { ascending: true });
+
+  if (orgId) {
+    query = query.eq("organization_id", orgId);
+  }
+
+  const { data, error } = await query;
   if (error) throw error;
   return (data ?? []) as any;
 }
@@ -76,11 +86,16 @@ function FilterChips({ value, onChange }: { value: Filter; onChange: (v: Filter)
 
 export default function Produtos() {
   const qc = useQueryClient();
+  const { currentOrg } = useOrganization();
   const [filter, setFilter] = React.useState<Filter>("Todos");
   const [q, setQ] = React.useState("");
   const [showInactive, setShowInactive] = React.useState(false);
   const [inactivateTarget, setInactivateTarget] = React.useState<{ id: string; name: string } | null>(null);
-  const { data, isLoading, error } = useQuery({ queryKey: ["products"], queryFn: fetchProducts });
+  const { data, isLoading, error } = useQuery({
+    queryKey: ["products", currentOrg?.id],
+    queryFn: () => fetchProducts(currentOrg?.id),
+    enabled: Boolean(currentOrg?.id),
+  });
 
   const activeProducts = React.useMemo(() => {
     return (data ?? []).filter((p) => (p.status ?? "Ativo") !== "Inativo");
@@ -205,7 +220,11 @@ export default function Produtos() {
               <Switch checked={showInactive} onCheckedChange={setShowInactive} aria-label="Mostrar inativos" />
             </div>
             <FilterChips value={filter} onChange={setFilter} />
-            <ProductFormSheet />
+            <div className="flex flex-wrap items-center gap-2">
+              <SpreadsheetDataImporter />
+              <BomManagerDialog />
+              <ProductFormSheet />
+            </div>
           </div>
         </div>
 
@@ -307,6 +326,16 @@ export default function Produtos() {
                           <TableCell className="text-right">{formatBRL(Number(p.price_sale ?? 0))}</TableCell>
                           <TableCell className="text-right">
                             <div className="inline-flex items-center gap-2">
+                              {p.type === "Produto Final" && (
+                                <BomManagerDialog
+                                  defaultProductId={p.id}
+                                  trigger={
+                                    <Button type="button" variant="outline" size="icon" title="Ficha Técnica / Receita">
+                                      <ChefHat className="h-4 w-4 text-primary" />
+                                    </Button>
+                                  }
+                                />
+                              )}
                               <ProductFormSheet
                                 product={mappedEditable(p)}
                                 trigger={

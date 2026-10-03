@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, Mail, MapPin, MessageCircle, Pencil, Phone, Plus, Search, Trash2, Users } from "lucide-react";
+import { Loader2, Mail, MapPin, MessageCircle, Pencil, Phone, Plus, Search, Trash2, User, Users } from "lucide-react";
 
 import { AppShell } from "@/components/layout/AppShell";
 import { Button } from "@/components/ui/button";
@@ -17,8 +17,10 @@ import { toast } from "sonner";
 import { isForeignKeyViolation, toastDeleteBlocked } from "@/lib/supabaseErrors";
 import { StaffTab } from "@/components/staff/StaffTab";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
+import { useOrganization } from "@/contexts/OrganizationContext";
 import { cleanDigits, getWhatsAppUrl, maskCep, maskCpfCnpj, maskPhone } from "@/lib/masks";
 import { fetchAddressByCep } from "@/lib/viaCep";
+import { SpreadsheetDataImporter } from "@/components/organization/SpreadsheetDataImporter";
 
 type ClientRow = {
   id: string;
@@ -57,20 +59,24 @@ type EntityPayload = {
   observations: string | null;
 };
 
-async function fetchClients(): Promise<ClientRow[]> {
-  const { data, error } = await supabase
+async function fetchClients(orgId?: string): Promise<ClientRow[]> {
+  let query = supabase
     .from("clients")
     .select("id,name,tax_id,phone,email,address,city,state,limit_credit,observations")
     .order("name", { ascending: true });
+  if (orgId) query = query.eq("organization_id", orgId);
+  const { data, error } = await query;
   if (error) throw error;
   return (data ?? []) as any;
 }
 
-async function fetchSuppliers(): Promise<SupplierRow[]> {
-  const { data, error } = await supabase
+async function fetchSuppliers(orgId?: string): Promise<SupplierRow[]> {
+  let query = supabase
     .from("suppliers")
     .select("id,name,tax_id,phone,email,address,city,state,observations")
     .order("name", { ascending: true });
+  if (orgId) query = query.eq("organization_id", orgId);
+  const { data, error } = await query;
   if (error) throw error;
   return (data ?? []) as any;
 }
@@ -99,6 +105,7 @@ function EntityDialog({
   const [city, setCity] = React.useState(initial?.city ?? "");
   const [state, setState] = React.useState(initial?.state ?? "");
   const [limitCredit, setLimitCredit] = React.useState<number | "">(initial?.limit_credit ?? "");
+  const [contactName, setContactName] = React.useState("");
   const [observations, setObservations] = React.useState(initial?.observations ?? "");
 
   React.useEffect(() => {
@@ -112,7 +119,16 @@ function EntityDialog({
     setCity(initial?.city ?? "");
     setState(initial?.state ?? "");
     setLimitCredit(initial?.limit_credit ?? "");
-    setObservations(initial?.observations ?? "");
+
+    const obs = initial?.observations ?? "";
+    const match = obs.match(/^\[Vendedor:\s*([^\]]+)\]\s*(.*)$/);
+    if (match) {
+      setContactName(match[1]);
+      setObservations(match[2]);
+    } else {
+      setContactName("");
+      setObservations(obs);
+    }
   }, [open, initial]);
 
   const handleCepLookup = async (cepInput: string) => {
@@ -254,6 +270,17 @@ function EntityDialog({
             </div>
           )}
 
+          {!isClient && (
+            <div className="grid gap-2 border-t pt-3">
+              <Label>Vendedor / Representante Comercial (Contato)</Label>
+              <Input
+                value={contactName}
+                onChange={(e) => setContactName(e.target.value)}
+                placeholder="Ex: Thiago, Ney, Nicole Silva..."
+              />
+            </div>
+          )}
+
           <div className="grid gap-2">
             <Label>Observações Gerais</Label>
             <Input
@@ -270,6 +297,11 @@ function EntityDialog({
             onClick={async () => {
               try {
                 if (!name.trim()) throw new Error("Informe o nome");
+                const finalObs =
+                  !isClient && contactName.trim()
+                    ? `[Vendedor: ${contactName.trim()}] ${observations.trim()}`.trim()
+                    : observations.trim() || null;
+
                 await onSave({
                   name: name.trim(),
                   tax_id: cleanDigits(taxId) ? maskCpfCnpj(taxId) : null,
@@ -279,7 +311,7 @@ function EntityDialog({
                   city: city.trim() || null,
                   state: state.trim() || null,
                   limit_credit: limitCredit === "" ? null : Number(limitCredit),
-                  observations: observations.trim() || null,
+                  observations: finalObs,
                 });
                 setOpen(false);
               } catch (e: any) {
@@ -298,13 +330,16 @@ function EntityDialog({
 export default function Cadastros() {
   const qc = useQueryClient();
   const { data: isAdmin } = useIsAdmin();
+  const { currentOrg } = useOrganization();
   const { data: clients, isLoading: loadingClients, error: errClients } = useQuery({
-    queryKey: ["clients"],
-    queryFn: fetchClients,
+    queryKey: ["clients", currentOrg?.id],
+    queryFn: () => fetchClients(currentOrg?.id),
+    enabled: Boolean(currentOrg?.id),
   });
   const { data: suppliers, isLoading: loadingSuppliers, error: errSuppliers } = useQuery({
-    queryKey: ["suppliers"],
-    queryFn: fetchSuppliers,
+    queryKey: ["suppliers", currentOrg?.id],
+    queryFn: () => fetchSuppliers(currentOrg?.id),
+    enabled: Boolean(currentOrg?.id),
   });
 
   const [tab, setTab] = React.useState("clientes");
@@ -346,7 +381,10 @@ export default function Cadastros() {
         const { error } = await supabase.from("clients").update(payload as any).eq("id", payload.id);
         if (error) throw error;
       } else {
-        const { error } = await supabase.from("clients").insert(payload as any);
+        const { error } = await (supabase.from("clients") as any).insert({
+          ...(payload as any),
+          organization_id: currentOrg?.id,
+        });
         if (error) throw error;
       }
     },
@@ -363,7 +401,10 @@ export default function Cadastros() {
         const { error } = await supabase.from("suppliers").update(payload as any).eq("id", payload.id);
         if (error) throw error;
       } else {
-        const { error } = await supabase.from("suppliers").insert(payload as any);
+        const { error } = await (supabase.from("suppliers") as any).insert({
+          ...(payload as any),
+          organization_id: currentOrg?.id,
+        });
         if (error) throw error;
       }
     },
@@ -414,14 +455,17 @@ export default function Cadastros() {
               Gestão de clientes, fornecedores e equipe com busca automática e integração WhatsApp.
             </p>
           </div>
-          <div className="relative w-full md:w-[360px]">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder="Buscar por nome, documento, cidade…"
-              className="pl-9"
-            />
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+            <SpreadsheetDataImporter />
+            <div className="relative w-full sm:w-[320px]">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder="Buscar por nome, documento, cidade…"
+                className="pl-9"
+              />
+            </div>
           </div>
         </div>
 
@@ -637,10 +681,23 @@ export default function Cadastros() {
                             </TableRow>
                           ) : (
                             filteredSuppliers.map((s) => {
-                              const waUrl = getWhatsAppUrl(s.phone, `Olá ${s.name}, contato do AGILIX.`);
+                              const matchVendedor = s.observations?.match(/\[Vendedor:\s*([^\]]+)\]/);
+                              const vendedor = matchVendedor ? matchVendedor[1] : null;
+                              const waGreeting = vendedor
+                                ? `Olá ${vendedor}, tudo bem? Contato da fábrica via AGILIX referente a ${s.name}.`
+                                : `Olá ${s.name}, tudo bem? Contato da fábrica via AGILIX.`;
+                              const waUrl = getWhatsAppUrl(s.phone, waGreeting);
                               return (
                                 <TableRow key={s.id} className="odd:bg-muted/20">
-                                  <TableCell className="font-semibold">{s.name}</TableCell>
+                                  <TableCell>
+                                    <div className="font-semibold">{s.name}</div>
+                                    {vendedor && (
+                                      <div className="mt-0.5 inline-flex items-center gap-1 text-xs font-medium text-primary">
+                                        <User className="h-3 w-3" />
+                                        <span>Vendedor: {vendedor}</span>
+                                      </div>
+                                    )}
+                                  </TableCell>
                                   <TableCell className="text-muted-foreground">
                                     {s.tax_id ? maskCpfCnpj(s.tax_id) : "—"}
                                   </TableCell>
