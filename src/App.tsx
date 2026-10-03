@@ -18,6 +18,7 @@ const Financeiro = React.lazy(() => import("./pages/Financeiro"));
 const Compras = React.lazy(() => import("./pages/Compras"));
 const Producao = React.lazy(() => import("./pages/Producao"));
 const Cadastros = React.lazy(() => import("./pages/Cadastros"));
+const RH = React.lazy(() => import("./pages/RH"));
 const Relatorios = React.lazy(() => import("./pages/Relatorios"));
 const Custos = React.lazy(() => import("./pages/Custos"));
 const NotFound = React.lazy(() => import("./pages/NotFound"));
@@ -98,6 +99,14 @@ const App = () => {
                 element={
                   <RequireAuth>
                     <Cadastros />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/rh"
+                element={
+                  <RequireAuth>
+                    <RH />
                   </RequireAuth>
                 }
               />

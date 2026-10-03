@@ -1,5 +1,4 @@
-import * as React from "react";
-import { BarChart3, Calculator, Factory, LayoutGrid, Package, Settings, ShoppingCart, Truck, Users, Wallet } from "lucide-react";
+import { BarChart3, Calculator, Factory, LayoutGrid, Package, Settings, ShoppingCart, Truck, UserCheck, Users, Wallet } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 
 import { useIsAdmin } from "@/hooks/useIsAdmin";
@@ -27,12 +26,13 @@ const items = [
   { title: "Estoque", url: "/estoque", icon: LayoutGrid },
   { title: "Produtos", url: "/produtos", icon: Package },
   { title: "Cadastros", url: "/cadastros", icon: Users },
+  { title: "RH & Pessoal", url: "/rh", icon: UserCheck },
   { title: "Compras", url: "/compras", icon: Truck },
-  { title: "Relatórios", url: "/relatorios", icon: BarChart3 },
-  { title: "Custos/Precificação", url: "/custos", icon: Calculator },
   { title: "Produção", url: "/producao", icon: Factory },
   { title: "Vendas", url: "/vendas", icon: ShoppingCart },
   { title: "Financeiro", url: "/financeiro", icon: Wallet },
+  { title: "Custos/Precificação", url: "/custos", icon: Calculator },
+  { title: "Relatórios", url: "/relatorios", icon: BarChart3 },
 ];
 
 import agiliXLogo from "@/assets/agilix_logo.png";
