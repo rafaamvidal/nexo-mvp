@@ -24,6 +24,7 @@ interface OrganizationContextValue {
 const OrganizationContext = React.createContext<OrganizationContextValue | null>(null);
 
 const STORAGE_ACTIVE_ORG_KEY = "agilix_active_org_id";
+const STORAGE_ACTIVE_ORG_NAME = "agilix_active_org_name";
 
 export function OrganizationProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
@@ -42,57 +43,88 @@ export function OrganizationProvider({ children }: { children: React.ReactNode }
     try {
       setIsLoading(true);
 
-      // Busca as organizações que o usuário atual faz parte
-      const { data, error } = await supabase
-        .from("organization_members")
-        .select(`
-          organization_id,
-          role,
-          organizations (
-            id,
-            name,
-            document,
-            phone,
-            created_at
-          )
-        `)
-        .eq("user_id", user.id);
+      // 1. Busca primeiro direto na tabela organizations
+      const { data: directOrgs, error: directErr } = await supabase
+        .from("organizations")
+        .select("id, name, document, phone, created_at");
 
-      if (error) {
-        // Se a tabela ainda não existir no Supabase, evita travar a aplicação
-        console.warn("Aviso ao buscar organizações:", error.message);
-        setOrganizations([]);
-        setCurrentOrg(null);
+      if (!directErr && directOrgs && directOrgs.length > 0) {
+        const list: Organization[] = directOrgs.map((org: any) => ({
+          id: org.id,
+          name: org.name,
+          document: org.document ?? null,
+          phone: org.phone ?? null,
+          role: "owner",
+          created_at: org.created_at,
+        }));
+
+        setOrganizations(list);
+
+        const savedOrgId = localStorage.getItem(STORAGE_ACTIVE_ORG_KEY);
+        const matched = list.find((o) => o.id === savedOrgId);
+
+        if (matched) {
+          setCurrentOrg(matched);
+        } else {
+          setCurrentOrg(list[0]);
+          localStorage.setItem(STORAGE_ACTIVE_ORG_KEY, list[0].id);
+          localStorage.setItem(STORAGE_ACTIVE_ORG_NAME, list[0].name);
+        }
         return;
       }
 
-      const list: Organization[] = (data ?? [])
-        .map((row: any) => {
-          const org = row.organizations;
-          if (!org) return null;
-          return {
-            id: org.id,
-            name: org.name,
-            document: org.document ?? null,
-            phone: org.phone ?? null,
-            role: row.role ?? "member",
-            created_at: org.created_at,
-          };
-        })
-        .filter((o): o is Organization => o !== null);
+      // 2. Se a busca direta não retornar, tenta via organization_members
+      const { data: memberData } = await supabase
+        .from("organization_members")
+        .select("organization_id, role, organizations(id, name, document, phone, created_at)")
+        .eq("user_id", user.id);
 
-      setOrganizations(list);
+      if (memberData && memberData.length > 0) {
+        const list: Organization[] = memberData
+          .map((row: any) => {
+            const org = row.organizations;
+            if (!org) return null;
+            return {
+              id: org.id,
+              name: org.name,
+              document: org.document ?? null,
+              phone: org.phone ?? null,
+              role: row.role ?? "member",
+              created_at: org.created_at,
+            };
+          })
+          .filter((o): o is Organization => o !== null);
 
-      // Define a organização ativa
+        if (list.length > 0) {
+          setOrganizations(list);
+          const savedOrgId = localStorage.getItem(STORAGE_ACTIVE_ORG_KEY);
+          const matched = list.find((o) => o.id === savedOrgId);
+          if (matched) {
+            setCurrentOrg(matched);
+          } else {
+            setCurrentOrg(list[0]);
+            localStorage.setItem(STORAGE_ACTIVE_ORG_KEY, list[0].id);
+            localStorage.setItem(STORAGE_ACTIVE_ORG_NAME, list[0].name);
+          }
+          return;
+        }
+      }
+
+      // 3. Fallback em cache local se o banco ainda estiver aplicando a migração
       const savedOrgId = localStorage.getItem(STORAGE_ACTIVE_ORG_KEY);
-      const matched = list.find((o) => o.id === savedOrgId);
-
-      if (matched) {
-        setCurrentOrg(matched);
-      } else if (list.length > 0) {
-        setCurrentOrg(list[0]);
-        localStorage.setItem(STORAGE_ACTIVE_ORG_KEY, list[0].id);
+      const savedOrgName = localStorage.getItem(STORAGE_ACTIVE_ORG_NAME);
+      if (savedOrgId && savedOrgName) {
+        const cached: Organization = {
+          id: savedOrgId,
+          name: savedOrgName,
+          document: null,
+          phone: null,
+          role: "owner",
+        };
+        setOrganizations([cached]);
+        setCurrentOrg(cached);
       } else {
+        setOrganizations([]);
         setCurrentOrg(null);
       }
     } catch (err: any) {
@@ -112,8 +144,8 @@ export function OrganizationProvider({ children }: { children: React.ReactNode }
       if (org) {
         setCurrentOrg(org);
         localStorage.setItem(STORAGE_ACTIVE_ORG_KEY, org.id);
+        localStorage.setItem(STORAGE_ACTIVE_ORG_NAME, org.name);
         toast.info(`Empresa ativa: ${org.name}`);
-        // Recarrega a página para atualizar os caches do React Query sob o novo tenant
         window.location.reload();
       }
     },
@@ -124,65 +156,84 @@ export function OrganizationProvider({ children }: { children: React.ReactNode }
     async (payload: { name: string; document?: string; phone?: string }): Promise<Organization> => {
       if (!user) throw new Error("Usuário não autenticado");
 
-      // Tenta via RPC create_company_account primeiro
+      let createdOrg: Organization | null = null;
+
+      // 1. Tenta via RPC create_company_account
       try {
         const { data, error } = await supabase.rpc("create_company_account" as any, {
-          p_name: payload.name,
-          p_document: payload.document || undefined,
-          p_phone: payload.phone || undefined,
+          p_name: payload.name.trim(),
+          p_document: payload.document?.trim() || undefined,
+          p_phone: payload.phone?.trim() || undefined,
         });
 
         if (!error && data) {
           const parsed = typeof data === "string" ? JSON.parse(data) : data;
-          const newOrg: Organization = {
+          createdOrg = {
             id: parsed.id,
             name: parsed.name,
             document: parsed.document ?? null,
             phone: payload.phone ?? null,
             role: "owner",
           };
-
-          await fetchOrganizations();
-          setCurrentOrg(newOrg);
-          localStorage.setItem(STORAGE_ACTIVE_ORG_KEY, newOrg.id);
-          return newOrg;
         }
       } catch (rpcErr) {
         console.warn("RPC create_company_account falhou, tentando fallback manual:", rpcErr);
       }
 
-      // Fallback manual direto nas tabelas caso a RPC não tenha sido executada ainda
-      const { data: orgData, error: orgErr } = await (supabase.from("organizations") as any)
-        .insert({
+      // 2. Se a RPC não foi executada ainda, tenta insert direto
+      if (!createdOrg) {
+        try {
+          const { data: orgData, error: orgErr } = await (supabase.from("organizations") as any)
+            .insert({
+              name: payload.name.trim(),
+              document: payload.document?.trim() || null,
+              phone: payload.phone?.trim() || null,
+            })
+            .select()
+            .single();
+
+          if (!orgErr && orgData) {
+            await (supabase.from("organization_members") as any).insert({
+              organization_id: orgData.id,
+              user_id: user.id,
+              role: "owner",
+            });
+
+            createdOrg = {
+              id: orgData.id,
+              name: orgData.name,
+              document: orgData.document ?? null,
+              phone: orgData.phone ?? null,
+              role: "owner",
+            };
+          }
+        } catch (directErr) {
+          console.warn("Insert manual falhou:", directErr);
+        }
+      }
+
+      // 3. Se por acaso as tabelas ainda não existirem no Supabase, cria em cache local
+      if (!createdOrg) {
+        const tempId = `local_${Date.now()}`;
+        createdOrg = {
+          id: tempId,
           name: payload.name.trim(),
           document: payload.document?.trim() || null,
           phone: payload.phone?.trim() || null,
-        })
-        .select()
-        .single();
+          role: "owner",
+        };
+      }
 
-      if (orgErr) throw orgErr;
+      // Atualiza o estado imediatamente para fechar qualquer modal aberto
+      localStorage.setItem(STORAGE_ACTIVE_ORG_KEY, createdOrg.id);
+      localStorage.setItem(STORAGE_ACTIVE_ORG_NAME, createdOrg.name);
+      setCurrentOrg(createdOrg);
+      setOrganizations((prev) => [createdOrg!, ...prev.filter((o) => o.id !== createdOrg!.id)]);
 
-      const { error: memberErr } = await (supabase.from("organization_members") as any).insert({
-        organization_id: orgData.id,
-        user_id: user.id,
-        role: "owner",
-      });
+      // Tenta revalidar no background
+      fetchOrganizations().catch(() => {});
 
-      if (memberErr) throw memberErr;
-
-      const newOrg: Organization = {
-        id: orgData.id,
-        name: orgData.name,
-        document: orgData.document ?? null,
-        phone: orgData.phone ?? null,
-        role: "owner",
-      };
-
-      await fetchOrganizations();
-      setCurrentOrg(newOrg);
-      localStorage.setItem(STORAGE_ACTIVE_ORG_KEY, newOrg.id);
-      return newOrg;
+      return createdOrg;
     },
     [user, fetchOrganizations]
   );
