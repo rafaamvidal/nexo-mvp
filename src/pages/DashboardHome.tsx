@@ -17,11 +17,16 @@ import {
   AlertTriangle,
   ArrowRight,
   BarChart3,
+  Building2,
   CheckCircle2,
   Package,
   PackageX,
+  Plus,
+  Sparkles,
   Wallet,
 } from "lucide-react";
+
+import { useOrganization } from "@/contexts/OrganizationContext";
 
 import { AppShell } from "@/components/layout/AppShell";
 import { Badge } from "@/components/ui/badge";
@@ -198,12 +203,19 @@ async function fetchDashboardData(): Promise<DashboardData> {
 }
 
 export default function DashboardHome() {
-  const { data, isLoading, error } = useQuery({ queryKey: ["dashboard"], queryFn: fetchDashboardData });
+  const { currentOrg, organizations, isLoading: isOrgLoading, openSetupModal } = useOrganization();
+  const { data, isLoading, error } = useQuery({
+    queryKey: ["dashboard", currentOrg?.id],
+    queryFn: fetchDashboardData,
+    enabled: Boolean(currentOrg?.id),
+  });
   const todayStr = new Date().toISOString().slice(0, 10);
 
   const hasAlerts =
     (data?.criticalStock && data.criticalStock.length > 0) ||
     (data?.urgentFinancial && data.urgentFinancial.length > 0);
+
+  const hasNoOrg = !isOrgLoading && !currentOrg && organizations.length === 0;
 
   return (
     <AppShell title="Dashboard">
@@ -218,6 +230,25 @@ export default function DashboardHome() {
             Dados em tempo real
           </div>
         </header>
+
+        {hasNoOrg && (
+          <Card className="glass border-primary/40 bg-primary/5 p-8 text-center shadow-elevated">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary mb-3">
+              <Building2 className="h-7 w-7" />
+            </div>
+            <h2 className="text-xl font-bold tracking-tight">Configure sua Empresa no Agilix ERP</h2>
+            <p className="mx-auto mt-2 max-w-lg text-sm text-muted-foreground">
+              Você ainda não possui uma empresa cadastrada. Para começar a cadastrar produtos, gerenciar clientes,
+              registrar vendas e controlar seu estoque do zero, cadastre sua empresa.
+            </p>
+            <div className="mt-5 flex justify-center">
+              <Button onClick={openSetupModal} variant="hero" size="lg" className="gap-2 shadow-sm">
+                <Plus className="h-5 w-5" />
+                Cadastrar Minha Empresa Agora
+              </Button>
+            </div>
+          </Card>
+        )}
 
         {error && (
           <Card className="glass p-6">

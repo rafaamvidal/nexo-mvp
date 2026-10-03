@@ -1,4 +1,5 @@
 import * as React from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
@@ -16,6 +17,9 @@ interface OrganizationContextValue {
   organizations: Organization[];
   currentOrg: Organization | null;
   isLoading: boolean;
+  isSetupModalOpen: boolean;
+  openSetupModal: () => void;
+  closeSetupModal: () => void;
   selectOrganization: (orgId: string) => void;
   createOrganization: (payload: { name: string; document?: string; phone?: string }) => Promise<Organization>;
   refreshOrganizations: () => Promise<void>;
@@ -23,63 +27,39 @@ interface OrganizationContextValue {
 
 const OrganizationContext = React.createContext<OrganizationContextValue | null>(null);
 
-const STORAGE_ACTIVE_ORG_KEY = "agilix_active_org_id";
-const STORAGE_ACTIVE_ORG_NAME = "agilix_active_org_name";
+const getStorageKey = (userId: string, key: string) => `agilix_${key}_${userId}`;
 
 export function OrganizationProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
+
   const [organizations, setOrganizations] = React.useState<Organization[]>([]);
   const [currentOrg, setCurrentOrg] = React.useState<Organization | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
+  const [isSetupModalOpen, setIsSetupModalOpen] = React.useState(false);
+
+  const openSetupModal = React.useCallback(() => setIsSetupModalOpen(true), []);
+  const closeSetupModal = React.useCallback(() => setIsSetupModalOpen(false), []);
 
   const fetchOrganizations = React.useCallback(async () => {
     if (!user) {
       setOrganizations([]);
       setCurrentOrg(null);
       setIsLoading(false);
+      setIsSetupModalOpen(false);
       return;
     }
 
     try {
       setIsLoading(true);
 
-      // 1. Busca primeiro direto na tabela organizations
-      const { data: directOrgs, error: directErr } = await supabase
-        .from("organizations")
-        .select("id, name, document, phone, created_at");
-
-      if (!directErr && directOrgs && directOrgs.length > 0) {
-        const list: Organization[] = directOrgs.map((org: any) => ({
-          id: org.id,
-          name: org.name,
-          document: org.document ?? null,
-          phone: org.phone ?? null,
-          role: "owner",
-          created_at: org.created_at,
-        }));
-
-        setOrganizations(list);
-
-        const savedOrgId = localStorage.getItem(STORAGE_ACTIVE_ORG_KEY);
-        const matched = list.find((o) => o.id === savedOrgId);
-
-        if (matched) {
-          setCurrentOrg(matched);
-        } else {
-          setCurrentOrg(list[0]);
-          localStorage.setItem(STORAGE_ACTIVE_ORG_KEY, list[0].id);
-          localStorage.setItem(STORAGE_ACTIVE_ORG_NAME, list[0].name);
-        }
-        return;
-      }
-
-      // 2. Se a busca direta não retornar, tenta via organization_members
-      const { data: memberData } = await supabase
+      // 1. Busca os vínculos de organização do usuário
+      const { data: memberData, error: memberErr } = await supabase
         .from("organization_members")
         .select("organization_id, role, organizations(id, name, document, phone, created_at)")
         .eq("user_id", user.id);
 
-      if (memberData && memberData.length > 0) {
+      if (!memberErr && memberData && memberData.length > 0) {
         const list: Organization[] = memberData
           .map((row: any) => {
             const org = row.organizations;
@@ -97,38 +77,65 @@ export function OrganizationProvider({ children }: { children: React.ReactNode }
 
         if (list.length > 0) {
           setOrganizations(list);
-          const savedOrgId = localStorage.getItem(STORAGE_ACTIVE_ORG_KEY);
+          const activeKey = getStorageKey(user.id, "active_org_id");
+          const savedOrgId = localStorage.getItem(activeKey);
           const matched = list.find((o) => o.id === savedOrgId);
+
           if (matched) {
             setCurrentOrg(matched);
           } else {
             setCurrentOrg(list[0]);
-            localStorage.setItem(STORAGE_ACTIVE_ORG_KEY, list[0].id);
-            localStorage.setItem(STORAGE_ACTIVE_ORG_NAME, list[0].name);
+            localStorage.setItem(activeKey, list[0].id);
+            localStorage.setItem(getStorageKey(user.id, "active_org_name"), list[0].name);
           }
           return;
         }
       }
 
-      // 3. Fallback em cache local se o banco ainda estiver aplicando a migração
-      const savedOrgId = localStorage.getItem(STORAGE_ACTIVE_ORG_KEY);
-      const savedOrgName = localStorage.getItem(STORAGE_ACTIVE_ORG_NAME);
-      if (savedOrgId && savedOrgName) {
-        const cached: Organization = {
-          id: savedOrgId,
-          name: savedOrgName,
-          document: null,
-          phone: null,
+      // 2. Se a busca por membros falhar ou vier vazia, tenta diretamente em organizations
+      const { data: directOrgs, error: directErr } = await supabase
+        .from("organizations")
+        .select("id, name, document, phone, created_at");
+
+      if (!directErr && directOrgs && directOrgs.length > 0) {
+        const list: Organization[] = directOrgs.map((org: any) => ({
+          id: org.id,
+          name: org.name,
+          document: org.document ?? null,
+          phone: org.phone ?? null,
           role: "owner",
-        };
-        setOrganizations([cached]);
-        setCurrentOrg(cached);
-      } else {
-        setOrganizations([]);
-        setCurrentOrg(null);
+          created_at: org.created_at,
+        }));
+
+        setOrganizations(list);
+        const activeKey = getStorageKey(user.id, "active_org_id");
+        const savedOrgId = localStorage.getItem(activeKey);
+        const matched = list.find((o) => o.id === savedOrgId);
+
+        if (matched) {
+          setCurrentOrg(matched);
+        } else {
+          setCurrentOrg(list[0]);
+          localStorage.setItem(activeKey, list[0].id);
+          localStorage.setItem(getStorageKey(user.id, "active_org_name"), list[0].name);
+        }
+        return;
+      }
+
+      // 3. Usuário novo: zero organizações encontradas
+      setOrganizations([]);
+      setCurrentOrg(null);
+
+      // Abre automaticamente o modal se não for o superadmin
+      const isPlatformAdmin = user.email === "admin@erp.com.br";
+      const dismissedKey = getStorageKey(user.id, "dismiss_setup");
+      const isDismissed = sessionStorage.getItem(dismissedKey) === "true";
+
+      if (!isPlatformAdmin && !isDismissed) {
+        setIsSetupModalOpen(true);
       }
     } catch (err: any) {
-      console.warn("Erro ao carregar organizações:", err);
+      console.warn("Aviso ao carregar organizações:", err);
     } finally {
       setIsLoading(false);
     }
@@ -141,15 +148,16 @@ export function OrganizationProvider({ children }: { children: React.ReactNode }
   const selectOrganization = React.useCallback(
     (orgId: string) => {
       const org = organizations.find((o) => o.id === orgId);
-      if (org) {
+      if (org && user) {
         setCurrentOrg(org);
-        localStorage.setItem(STORAGE_ACTIVE_ORG_KEY, org.id);
-        localStorage.setItem(STORAGE_ACTIVE_ORG_NAME, org.name);
+        localStorage.setItem(getStorageKey(user.id, "active_org_id"), org.id);
+        localStorage.setItem(getStorageKey(user.id, "active_org_name"), org.name);
         toast.info(`Empresa ativa: ${org.name}`);
-        window.location.reload();
+        // Invalida as queries de negócio para recarregar com os dados da nova empresa sem piscar a página
+        queryClient.invalidateQueries();
       }
     },
-    [organizations]
+    [organizations, user, queryClient]
   );
 
   const createOrganization = React.useCallback(
@@ -158,7 +166,7 @@ export function OrganizationProvider({ children }: { children: React.ReactNode }
 
       let createdOrg: Organization | null = null;
 
-      // 1. Tenta via RPC create_company_account
+      // 1. Tenta executar via RPC create_company_account (SECURITY DEFINER atômica)
       try {
         const { data, error } = await supabase.rpc("create_company_account" as any, {
           p_name: payload.name.trim(),
@@ -175,12 +183,14 @@ export function OrganizationProvider({ children }: { children: React.ReactNode }
             phone: payload.phone ?? null,
             role: "owner",
           };
+        } else if (error) {
+          console.warn("RPC create_company_account retornou erro:", error);
         }
       } catch (rpcErr) {
-        console.warn("RPC create_company_account falhou, tentando fallback manual:", rpcErr);
+        console.warn("RPC create_company_account falhou, tentando fallback direto:", rpcErr);
       }
 
-      // 2. Se a RPC não foi executada ainda, tenta insert direto
+      // 2. Fallback de inserção direta caso a RPC não esteja aplicada ainda
       if (!createdOrg) {
         try {
           const { data: orgData, error: orgErr } = await (supabase.from("organizations") as any)
@@ -206,36 +216,33 @@ export function OrganizationProvider({ children }: { children: React.ReactNode }
               phone: orgData.phone ?? null,
               role: "owner",
             };
+          } else if (orgErr) {
+            throw orgErr;
           }
-        } catch (directErr) {
-          console.warn("Insert manual falhou:", directErr);
+        } catch (directErr: any) {
+          console.error("Falha ao criar organização:", directErr);
+          throw new Error(directErr?.message ?? "Erro ao salvar empresa no banco de dados.");
         }
       }
 
-      // 3. Se por acaso as tabelas ainda não existirem no Supabase, cria em cache local
       if (!createdOrg) {
-        const tempId = `local_${Date.now()}`;
-        createdOrg = {
-          id: tempId,
-          name: payload.name.trim(),
-          document: payload.document?.trim() || null,
-          phone: payload.phone?.trim() || null,
-          role: "owner",
-        };
+        throw new Error("Não foi possível criar a empresa. Verifique sua conexão e permissões.");
       }
 
-      // Atualiza o estado imediatamente para fechar qualquer modal aberto
-      localStorage.setItem(STORAGE_ACTIVE_ORG_KEY, createdOrg.id);
-      localStorage.setItem(STORAGE_ACTIVE_ORG_NAME, createdOrg.name);
+      // Atualiza o estado da empresa ativa imediatamente
+      localStorage.setItem(getStorageKey(user.id, "active_org_id"), createdOrg.id);
+      localStorage.setItem(getStorageKey(user.id, "active_org_name"), createdOrg.name);
+
       setCurrentOrg(createdOrg);
       setOrganizations((prev) => [createdOrg!, ...prev.filter((o) => o.id !== createdOrg!.id)]);
+      setIsSetupModalOpen(false);
 
-      // Tenta revalidar no background
-      fetchOrganizations().catch(() => {});
+      // Invalida as queries do React Query para alimentar o Dashboard e telas com os dados da nova empresa
+      queryClient.invalidateQueries();
 
       return createdOrg;
     },
-    [user, fetchOrganizations]
+    [user, queryClient]
   );
 
   const value = React.useMemo(
@@ -243,11 +250,24 @@ export function OrganizationProvider({ children }: { children: React.ReactNode }
       organizations,
       currentOrg,
       isLoading,
+      isSetupModalOpen,
+      openSetupModal,
+      closeSetupModal,
       selectOrganization,
       createOrganization,
       refreshOrganizations: fetchOrganizations,
     }),
-    [organizations, currentOrg, isLoading, selectOrganization, createOrganization, fetchOrganizations]
+    [
+      organizations,
+      currentOrg,
+      isLoading,
+      isSetupModalOpen,
+      openSetupModal,
+      closeSetupModal,
+      selectOrganization,
+      createOrganization,
+      fetchOrganizations,
+    ]
   );
 
   return <OrganizationContext.Provider value={value}>{children}</OrganizationContext.Provider>;

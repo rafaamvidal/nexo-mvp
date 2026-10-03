@@ -1,7 +1,8 @@
 -- ==============================================================================
--- MIGRAÇÃO MULTI-TENANT: AGILIX ERP (VERSÃO SIMPLIFICADA E RESILIENTE)
+-- MIGRAÇÃO MULTI-TENANT: AGILIX ERP (VERSÃO ULTRA-RESILIENTE E DE ALTA PERFORMANCE)
 -- Isola completamente dados de clientes, produtos, vendas, financeiro e estoque
--- por Empresa (Organization). Permite que múltiplos clientes usem o mesmo banco.
+-- por Empresa (Organization). Permite que múltiplos clientes usem o mesmo banco
+-- sem risco de recursão de RLS e com total segurança.
 -- ==============================================================================
 
 -- 1. TABELA DE ORGANIZAÇÕES (EMPRESAS)
@@ -162,7 +163,56 @@ BEGIN
 
 END $$;
 
--- 5. TRIGGER DE PREENCHIMENTO AUTOMÁTICO DE ORGANIZATION_ID
+-- 5. FUNÇÕES DE SUPORTE SECURITY DEFINER (SEM RECURSÃO DE RLS)
+
+-- 5.1 Função de checagem direta (evita qualquer recursão)
+CREATE OR REPLACE FUNCTION public.is_org_member(p_org_id uuid)
+RETURNS boolean
+LANGUAGE sql
+SECURITY DEFINER
+STABLE
+SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM public.organization_members
+    WHERE organization_id = p_org_id
+      AND user_id = auth.uid()
+  );
+$$;
+
+GRANT EXECUTE ON FUNCTION public.is_org_member(uuid) TO authenticated;
+
+-- 5.2 Funções de busca de IDs (com e sem parâmetro para compatibilidade absoluta)
+CREATE OR REPLACE FUNCTION public.get_user_org_ids()
+RETURNS TABLE (organization_id uuid)
+LANGUAGE sql
+SECURITY DEFINER
+STABLE
+SET search_path = public
+AS $$
+  SELECT organization_id
+  FROM public.organization_members
+  WHERE user_id = auth.uid();
+$$;
+
+GRANT EXECUTE ON FUNCTION public.get_user_org_ids() TO authenticated;
+
+CREATE OR REPLACE FUNCTION public.get_user_org_ids(p_user_id uuid)
+RETURNS TABLE (organization_id uuid)
+LANGUAGE sql
+SECURITY DEFINER
+STABLE
+SET search_path = public
+AS $$
+  SELECT organization_id
+  FROM public.organization_members
+  WHERE user_id = COALESCE(p_user_id, auth.uid());
+$$;
+
+GRANT EXECUTE ON FUNCTION public.get_user_org_ids(uuid) TO authenticated;
+
+-- 5.3 TRIGGER DE PREENCHIMENTO AUTOMÁTICO DE ORGANIZATION_ID
 CREATE OR REPLACE FUNCTION public.set_default_organization_id()
 RETURNS TRIGGER
 LANGUAGE plpgsql
@@ -242,6 +292,7 @@ BEGIN
   INSERT INTO public.organization_members (organization_id, user_id, role)
   VALUES (v_org.id, v_user_id, 'owner');
 
+  -- Adiciona role admin para permitir operação em todos os módulos
   INSERT INTO public.user_roles (user_id, role)
   VALUES (v_user_id, 'admin')
   ON CONFLICT (user_id, role) DO NOTHING;
@@ -250,6 +301,7 @@ BEGIN
     'id', v_org.id,
     'name', v_org.name,
     'document', v_org.document,
+    'phone', v_org.phone,
     'role', 'owner'
   );
 END;
@@ -325,7 +377,7 @@ $$;
 
 GRANT EXECUTE ON FUNCTION public.apply_movement(uuid, text, numeric, text, uuid) TO authenticated;
 
--- 8. POLÍTICAS DE ROW LEVEL SECURITY (RLS)
+-- 8. POLÍTICAS DE ROW LEVEL SECURITY (RLS) ANTI-RECURSÃO
 -- Remove políticas antigas de single-tenant
 DROP POLICY IF EXISTS products_admin_estoque_all ON public.products;
 DROP POLICY IF EXISTS products_authenticated_only ON public.products;
@@ -358,87 +410,105 @@ ALTER TABLE public.financial_records ENABLE ROW LEVEL SECURITY;
 
 -- 8.1 POLÍTICAS ORGANIZATIONS
 DROP POLICY IF EXISTS organizations_member_select ON public.organizations;
-CREATE POLICY organizations_member_select ON public.organizations
-  FOR SELECT TO authenticated
-  USING (id IN (SELECT om.organization_id FROM public.organization_members om WHERE om.user_id = auth.uid()));
-
+DROP POLICY IF EXISTS organizations_select_member ON public.organizations;
 DROP POLICY IF EXISTS organizations_insert_authenticated ON public.organizations;
+DROP POLICY IF EXISTS organizations_member_update ON public.organizations;
+DROP POLICY IF EXISTS organizations_update_member ON public.organizations;
+
+CREATE POLICY organizations_select_member ON public.organizations
+  FOR SELECT TO authenticated
+  USING (public.is_org_member(id));
+
 CREATE POLICY organizations_insert_authenticated ON public.organizations
   FOR INSERT TO authenticated
   WITH CHECK (true);
 
-DROP POLICY IF EXISTS organizations_member_update ON public.organizations;
-CREATE POLICY organizations_member_update ON public.organizations
+CREATE POLICY organizations_update_member ON public.organizations
   FOR UPDATE TO authenticated
-  USING (id IN (SELECT om.organization_id FROM public.organization_members om WHERE om.user_id = auth.uid() AND om.role IN ('owner', 'admin')));
+  USING (public.is_org_member(id));
 
--- 8.2 POLÍTICAS ORGANIZATION_MEMBERS
+-- 8.2 POLÍTICAS ORGANIZATION_MEMBERS (SIMPLES, RÁPIDA E SEM NENHUMA RECURSÃO)
 DROP POLICY IF EXISTS org_members_select ON public.organization_members;
+DROP POLICY IF EXISTS org_members_insert_authenticated ON public.organization_members;
+DROP POLICY IF EXISTS org_members_insert ON public.organization_members;
+DROP POLICY IF EXISTS org_members_admin_all ON public.organization_members;
+DROP POLICY IF EXISTS org_members_delete ON public.organization_members;
+
+-- Leitura: usuário só lê seu próprio registro de membro (zero subquery, zero recursão!)
 CREATE POLICY org_members_select ON public.organization_members
   FOR SELECT TO authenticated
-  USING (user_id = auth.uid() OR organization_id IN (SELECT om.organization_id FROM public.organization_members om WHERE om.user_id = auth.uid()));
+  USING (user_id = auth.uid());
 
-DROP POLICY IF EXISTS org_members_insert_authenticated ON public.organization_members;
-CREATE POLICY org_members_insert_authenticated ON public.organization_members
+-- Inserção: usuário pode vincular a si mesmo (ao criar empresa) ou outro membro se já pertencer à empresa
+CREATE POLICY org_members_insert ON public.organization_members
   FOR INSERT TO authenticated
-  WITH CHECK (user_id = auth.uid() OR organization_id IN (SELECT om.organization_id FROM public.organization_members om WHERE om.user_id = auth.uid() AND om.role IN ('owner', 'admin')));
+  WITH CHECK (user_id = auth.uid() OR public.is_org_member(organization_id));
 
-DROP POLICY IF EXISTS org_members_admin_all ON public.organization_members;
-CREATE POLICY org_members_admin_all ON public.organization_members
-  FOR ALL TO authenticated
-  USING (organization_id IN (SELECT om.organization_id FROM public.organization_members om WHERE om.user_id = auth.uid() AND om.role IN ('owner', 'admin')));
+-- Exclusão: usuário pode desvincular a si mesmo
+CREATE POLICY org_members_delete ON public.organization_members
+  FOR DELETE TO authenticated
+  USING (user_id = auth.uid() OR public.is_org_member(organization_id));
 
 -- 8.3 POLÍTICAS DE ISOLAMENTO POR EMPRESA NAS TABELAS DE NEGÓCIO
--- (Em políticas FOR ALL, o Postgres aplica o USING tanto na leitura quanto na escrita/insert/update automaticamente)
 DROP POLICY IF EXISTS clients_org_isolation ON public.clients;
 CREATE POLICY clients_org_isolation ON public.clients
   FOR ALL TO authenticated
-  USING (organization_id IN (SELECT om.organization_id FROM public.organization_members om WHERE om.user_id = auth.uid()));
+  USING (public.is_org_member(organization_id))
+  WITH CHECK (public.is_org_member(organization_id));
 
 DROP POLICY IF EXISTS products_org_isolation ON public.products;
 CREATE POLICY products_org_isolation ON public.products
   FOR ALL TO authenticated
-  USING (organization_id IN (SELECT om.organization_id FROM public.organization_members om WHERE om.user_id = auth.uid()));
+  USING (public.is_org_member(organization_id))
+  WITH CHECK (public.is_org_member(organization_id));
 
 DROP POLICY IF EXISTS suppliers_org_isolation ON public.suppliers;
 CREATE POLICY suppliers_org_isolation ON public.suppliers
   FOR ALL TO authenticated
-  USING (organization_id IN (SELECT om.organization_id FROM public.organization_members om WHERE om.user_id = auth.uid()));
+  USING (public.is_org_member(organization_id))
+  WITH CHECK (public.is_org_member(organization_id));
 
 DROP POLICY IF EXISTS sales_org_isolation ON public.sales;
 CREATE POLICY sales_org_isolation ON public.sales
   FOR ALL TO authenticated
-  USING (organization_id IN (SELECT om.organization_id FROM public.organization_members om WHERE om.user_id = auth.uid()));
+  USING (public.is_org_member(organization_id))
+  WITH CHECK (public.is_org_member(organization_id));
 
 DROP POLICY IF EXISTS sale_items_org_isolation ON public.sale_items;
 CREATE POLICY sale_items_org_isolation ON public.sale_items
   FOR ALL TO authenticated
-  USING (organization_id IN (SELECT om.organization_id FROM public.organization_members om WHERE om.user_id = auth.uid()));
+  USING (public.is_org_member(organization_id))
+  WITH CHECK (public.is_org_member(organization_id));
 
 DROP POLICY IF EXISTS purchase_orders_org_isolation ON public.purchase_orders;
 CREATE POLICY purchase_orders_org_isolation ON public.purchase_orders
   FOR ALL TO authenticated
-  USING (organization_id IN (SELECT om.organization_id FROM public.organization_members om WHERE om.user_id = auth.uid()));
+  USING (public.is_org_member(organization_id))
+  WITH CHECK (public.is_org_member(organization_id));
 
 DROP POLICY IF EXISTS purchase_items_org_isolation ON public.purchase_items;
 CREATE POLICY purchase_items_org_isolation ON public.purchase_items
   FOR ALL TO authenticated
-  USING (organization_id IN (SELECT om.organization_id FROM public.organization_members om WHERE om.user_id = auth.uid()));
+  USING (public.is_org_member(organization_id))
+  WITH CHECK (public.is_org_member(organization_id));
 
 DROP POLICY IF EXISTS manufacturing_orders_org_isolation ON public.manufacturing_orders;
 CREATE POLICY manufacturing_orders_org_isolation ON public.manufacturing_orders
   FOR ALL TO authenticated
-  USING (organization_id IN (SELECT om.organization_id FROM public.organization_members om WHERE om.user_id = auth.uid()));
+  USING (public.is_org_member(organization_id))
+  WITH CHECK (public.is_org_member(organization_id));
 
 DROP POLICY IF EXISTS stock_movements_org_isolation ON public.stock_movements;
 CREATE POLICY stock_movements_org_isolation ON public.stock_movements
   FOR ALL TO authenticated
-  USING (organization_id IN (SELECT om.organization_id FROM public.organization_members om WHERE om.user_id = auth.uid()));
+  USING (public.is_org_member(organization_id))
+  WITH CHECK (public.is_org_member(organization_id));
 
 DROP POLICY IF EXISTS financial_records_org_isolation ON public.financial_records;
 CREATE POLICY financial_records_org_isolation ON public.financial_records
   FOR ALL TO authenticated
-  USING (organization_id IN (SELECT om.organization_id FROM public.organization_members om WHERE om.user_id = auth.uid()));
+  USING (public.is_org_member(organization_id))
+  WITH CHECK (public.is_org_member(organization_id));
 
 DO $$
 BEGIN
@@ -447,6 +517,7 @@ BEGIN
     DROP POLICY IF EXISTS movements_org_isolation ON public.movements;
     CREATE POLICY movements_org_isolation ON public.movements
       FOR ALL TO authenticated
-      USING (organization_id IN (SELECT om.organization_id FROM public.organization_members om WHERE om.user_id = auth.uid()));
+      USING (public.is_org_member(organization_id))
+      WITH CHECK (public.is_org_member(organization_id));
   END IF;
 END $$;

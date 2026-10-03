@@ -13,26 +13,46 @@ import { Label } from "@/components/ui/label";
 
 import agiliXLogo from "@/assets/agilix_logo.png";
 
-const SESSION_DISMISS_KEY = "agilix_dismiss_company_setup";
-
 export function CompanySetupModal() {
   const { user, signOut } = useAuth();
   const { data: isAdmin } = useIsAdmin();
-  const { organizations, currentOrg, isLoading, createOrganization } = useOrganization();
+  const {
+    organizations,
+    currentOrg,
+    isLoading,
+    isSetupModalOpen,
+    openSetupModal,
+    closeSetupModal,
+    createOrganization,
+  } = useOrganization();
 
   const [companyName, setCompanyName] = React.useState("");
   const [document, setDocument] = React.useState("");
   const [phone, setPhone] = React.useState("");
   const [isSubmitting, setIsSubmitting] = React.useState(false);
-  const [isDismissed, setIsDismissed] = React.useState(() => {
-    return sessionStorage.getItem(SESSION_DISMISS_KEY) === "true";
-  });
 
-  // Usuário administrador da plataforma nunca deve ser obrigado a criar empresa
+  const getDismissKey = React.useCallback(
+    () => (user ? `agilix_dismiss_setup_${user.id}` : "agilix_dismiss_setup"),
+    [user]
+  );
+
+  const [isDismissed, setIsDismissed] = React.useState(false);
+
+  // Sincroniza o estado de dismiss com a sessão atual do usuário ativo
+  React.useEffect(() => {
+    if (user) {
+      const dismissed = sessionStorage.getItem(getDismissKey()) === "true";
+      setIsDismissed(dismissed);
+    } else {
+      setIsDismissed(false);
+    }
+  }, [user, getDismissKey]);
+
+  // Usuário superadmin da plataforma não deve ser obrigado a criar empresa automaticamente
   const isPlatformAdmin = Boolean(user?.email === "admin@erp.com.br" || isAdmin);
 
-  // Exibe apenas se o usuário NÃO for o admin da plataforma, não tiver empresa ativa e não tiver dispensado
-  const shouldOpen = Boolean(
+  // Deve abrir automaticamente se for usuário comum sem nenhuma empresa e sem dismiss nesta sessão
+  const shouldAutoOpen = Boolean(
     user &&
     !isPlatformAdmin &&
     !isDismissed &&
@@ -41,9 +61,14 @@ export function CompanySetupModal() {
     organizations.length === 0
   );
 
+  const isOpen = isSetupModalOpen || shouldAutoOpen;
+
   const handleDismiss = () => {
     setIsDismissed(true);
-    sessionStorage.setItem(SESSION_DISMISS_KEY, "true");
+    if (user) {
+      sessionStorage.setItem(getDismissKey(), "true");
+    }
+    closeSetupModal();
   };
 
   const handleLogout = async () => {
@@ -66,8 +91,11 @@ export function CompanySetupModal() {
         phone: phone.trim() || undefined,
       });
 
-      toast.success("Empresa criada com sucesso! Bem-vindo ao Agilix ERP.");
-      handleDismiss();
+      toast.success("Empresa cadastrada com sucesso! Bem-vindo ao Agilix ERP.");
+      setCompanyName("");
+      setDocument("");
+      setPhone("");
+      closeSetupModal();
     } catch (err: any) {
       toast.error(err?.message ?? "Erro ao criar empresa");
     } finally {
@@ -75,10 +103,10 @@ export function CompanySetupModal() {
     }
   };
 
-  if (!shouldOpen) return null;
+  if (!isOpen) return null;
 
   return (
-    <Dialog open={true} onOpenChange={(open) => { if (!open) handleDismiss(); }}>
+    <Dialog open={isOpen} onOpenChange={(open) => { if (!open) handleDismiss(); }}>
       <DialogContent className="sm:max-w-md border-border/60 shadow-elevated">
         <button
           type="button"
@@ -99,11 +127,11 @@ export function CompanySetupModal() {
           </div>
           <DialogTitle className="flex items-center gap-2 text-xl font-bold">
             <Building2 className="h-5 w-5 text-primary" />
-            Configurar Nova Empresa
+            Configurar Empresa
           </DialogTitle>
           <DialogDescription className="text-sm text-muted-foreground">
-            Para começar a usar o ERP, defina o nome da sua empresa. Todos os seus produtos, vendas,
-            clientes e financeiro serão salvos exclusivamente neste ambiente.
+            Defina o nome da sua empresa. Todos os seus produtos, vendas,
+            clientes e movimentações financeiras serão salvos exclusivamente neste ambiente.
           </DialogDescription>
         </DialogHeader>
 
@@ -153,7 +181,7 @@ export function CompanySetupModal() {
               disabled={isSubmitting || !companyName.trim()}
             >
               <Sparkles className="h-4 w-4" />
-              {isSubmitting ? "Criando espaço de trabalho…" : "Criar Minha Empresa & Começar"}
+              {isSubmitting ? "Criando espaço de trabalho…" : "Cadastrar Empresa & Começar"}
             </Button>
 
             <div className="flex items-center justify-between pt-1">
