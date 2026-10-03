@@ -302,7 +302,7 @@ function EntityDialog({
                     ? `[Vendedor: ${contactName.trim()}] ${observations.trim()}`.trim()
                     : observations.trim() || null;
 
-                await onSave({
+                const payloadToSave: EntityPayload = {
                   name: name.trim(),
                   tax_id: cleanDigits(taxId) ? maskCpfCnpj(taxId) : null,
                   phone: cleanDigits(phone) ? maskPhone(phone) : null,
@@ -310,9 +310,14 @@ function EntityDialog({
                   address: address.trim() || null,
                   city: city.trim() || null,
                   state: state.trim() || null,
-                  limit_credit: limitCredit === "" ? null : Number(limitCredit),
                   observations: finalObs,
-                });
+                };
+
+                if (isClient) {
+                  payloadToSave.limit_credit = limitCredit === "" ? null : Number(limitCredit);
+                }
+
+                await onSave(payloadToSave);
                 setOpen(false);
               } catch (e: any) {
                 toast.error(e?.message ?? "Erro ao salvar");
@@ -377,14 +382,24 @@ export default function Cadastros() {
 
   const upsertClient = useMutation({
     mutationFn: async (payload: EntityPayload & { id?: string }) => {
+      const clientData: any = {
+        name: payload.name,
+        tax_id: payload.tax_id,
+        phone: payload.phone,
+        email: payload.email,
+        address: payload.address,
+        city: payload.city,
+        state: payload.state,
+        limit_credit: payload.limit_credit,
+        observations: payload.observations,
+        organization_id: currentOrg?.id,
+      };
+
       if (payload.id) {
-        const { error } = await supabase.from("clients").update(payload as any).eq("id", payload.id);
+        const { error } = await supabase.from("clients").update(clientData).eq("id", payload.id);
         if (error) throw error;
       } else {
-        const { error } = await (supabase.from("clients") as any).insert({
-          ...(payload as any),
-          organization_id: currentOrg?.id,
-        });
+        const { error } = await supabase.from("clients").insert(clientData);
         if (error) throw error;
       }
     },
@@ -397,14 +412,23 @@ export default function Cadastros() {
 
   const upsertSupplier = useMutation({
     mutationFn: async (payload: EntityPayload & { id?: string }) => {
+      const supplierData: any = {
+        name: payload.name,
+        tax_id: payload.tax_id,
+        phone: payload.phone,
+        email: payload.email,
+        address: payload.address,
+        city: payload.city,
+        state: payload.state,
+        observations: payload.observations,
+        organization_id: currentOrg?.id,
+      };
+
       if (payload.id) {
-        const { error } = await supabase.from("suppliers").update(payload as any).eq("id", payload.id);
+        const { error } = await supabase.from("suppliers").update(supplierData).eq("id", payload.id);
         if (error) throw error;
       } else {
-        const { error } = await (supabase.from("suppliers") as any).insert({
-          ...(payload as any),
-          organization_id: currentOrg?.id,
-        });
+        const { error } = await supabase.from("suppliers").insert(supplierData);
         if (error) throw error;
       }
     },

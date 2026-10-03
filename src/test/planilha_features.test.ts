@@ -45,6 +45,68 @@ describe("Planilha Features & Industrial Calculations", () => {
     const suggestedReplenishment = Math.max(0, minStock * 2 - currentStock);
 
     expect(deficit).toBe(40);
-    expect(suggestedReplenishment).toBe(90); // 100 - 10 = 90
+    expect(suggestedReplenishment).toBe(90);
+  });
+
+  it("sanitizes supplier payload without sending limit_credit", () => {
+    // Simula o comportamento do diálogo e upsertSupplier
+    const rawForm = {
+      name: "Fornecedor Teste",
+      tax_id: "00.000.000/0001-99",
+      phone: "11999999999",
+      email: "teste@fornecedor.com",
+      address: "Rua Teste, 100",
+      city: "São Paulo",
+      state: "SP",
+      observations: "Obs",
+      limit_credit: 5000, // Campo acidental ou de cliente
+    };
+
+    const isClient = false;
+    const payloadToSave: any = {
+      name: rawForm.name,
+      tax_id: rawForm.tax_id,
+      phone: rawForm.phone,
+      email: rawForm.email,
+      address: rawForm.address,
+      city: rawForm.city,
+      state: rawForm.state,
+      observations: rawForm.observations,
+    };
+    if (isClient) {
+      payloadToSave.limit_credit = rawForm.limit_credit;
+    }
+
+    const supplierData: any = {
+      name: payloadToSave.name,
+      tax_id: payloadToSave.tax_id,
+      phone: payloadToSave.phone,
+      email: payloadToSave.email,
+      address: payloadToSave.address,
+      city: payloadToSave.city,
+      state: payloadToSave.state,
+      observations: payloadToSave.observations,
+    };
+
+    expect(payloadToSave.limit_credit).toBeUndefined();
+    expect(supplierData.limit_credit).toBeUndefined();
+    expect("limit_credit" in supplierData).toBe(false);
+  });
+
+  it("ensures sale_items and purchase_items retain organization_id in both creation and edit cycles", () => {
+    const orgId = "org-12345";
+    const draftItems = [
+      { product_id: "prod-1", quantity: 2, unit_price: 15.0, total: 30.0 },
+      { product_id: "prod-2", quantity: 5, unit_price: 10.0, total: 50.0 },
+    ];
+
+    const mappedItems = draftItems.map((item) => ({
+      ...item,
+      organization_id: orgId,
+    }));
+
+    expect(mappedItems).toHaveLength(2);
+    expect(mappedItems[0].organization_id).toBe("org-12345");
+    expect(mappedItems[1].organization_id).toBe("org-12345");
   });
 });

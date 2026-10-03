@@ -306,6 +306,7 @@ export default function Compras() {
           amount,
           nextStatus: "Recebido",
           dueDate,
+          orgId: currentOrg?.id,
         });
       }
     },
@@ -369,6 +370,7 @@ export default function Compras() {
         amount: Number(po.total_amount ?? 0),
         nextStatus: "Cancelado",
         dueDate,
+        orgId: currentOrg?.id,
       });
     },
     onSuccess: async () => {
@@ -471,6 +473,7 @@ export default function Compras() {
           quantity: Number(it.quantity),
           unit_cost: Number(it.unit_cost),
           total: Number(it.quantity) * Number(it.unit_cost),
+          organization_id: currentOrg?.id,
         }));
         const { error: insErr } = await supabase.from("purchase_items").insert(payload as any);
         if (insErr) throw insErr;
@@ -485,6 +488,7 @@ export default function Compras() {
           amount: Number(editTotal),
           nextStatus: editStatus,
           dueDate: editOrderDate || new Date().toISOString().slice(0, 10),
+          orgId: currentOrg?.id,
         });
       }
     },

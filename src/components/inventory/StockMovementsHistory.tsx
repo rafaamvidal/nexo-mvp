@@ -32,28 +32,48 @@ export type StockMovementRow = {
 };
 
 async function fetchStockMovements(orgId?: string): Promise<StockMovementRow[]> {
-  let query = supabase
+  const selectQuery = `
+    id,
+    created_at,
+    product_id,
+    type,
+    quantity,
+    reason,
+    reference_id,
+    products (
+      name,
+      unit,
+      sku,
+      category
+    )
+  `;
+
+  if (orgId) {
+    const res = await supabase
+      .from("stock_movements")
+      .select(selectQuery)
+      .eq("organization_id", orgId)
+      .order("created_at", { ascending: false })
+      .limit(250);
+
+    if (res.error && res.error.message?.includes("organization_id")) {
+      const fallback = await supabase
+        .from("stock_movements")
+        .select(selectQuery)
+        .order("created_at", { ascending: false })
+        .limit(250);
+      if (fallback.error) throw fallback.error;
+      return (fallback.data ?? []) as any;
+    }
+    if (res.error) throw res.error;
+    return (res.data ?? []) as any;
+  }
+
+  const { data, error } = await supabase
     .from("stock_movements")
-    .select(`
-      id,
-      created_at,
-      product_id,
-      type,
-      quantity,
-      reason,
-      reference_id,
-      products (
-        name,
-        unit,
-        sku,
-        category
-      )
-    `)
+    .select(selectQuery)
     .order("created_at", { ascending: false })
     .limit(250);
-
-  if (orgId) query = query.eq("organization_id", orgId);
-  const { data, error } = await query;
 
   if (error) throw error;
   return (data ?? []) as any;

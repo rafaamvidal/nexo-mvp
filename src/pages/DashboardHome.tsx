@@ -115,8 +115,19 @@ async function fetchDashboardData(orgId?: string): Promise<DashboardData> {
   if (moRes.error) throw moRes.error;
   if (salesRes.error) throw salesRes.error;
   if (finRes.error) throw finRes.error;
-  if (saleItemsRes.error) throw saleItemsRes.error;
   if (sales30Res.error) throw sales30Res.error;
+
+  let saleItemsRaw = saleItemsRes.data;
+  if (saleItemsRes.error) {
+    if (saleItemsRes.error.message?.includes("organization_id")) {
+      const fallback = await supabase.from("sale_items").select("total, products(name), sales(created_at, organization_id)");
+      if (!fallback.error) {
+        saleItemsRaw = (fallback.data ?? []).filter((it: any) => !it.sales?.organization_id || it.sales.organization_id === orgId) as any;
+      }
+    } else {
+      throw saleItemsRes.error;
+    }
+  }
 
   const products = (productsRes.data ?? []) as Array<{ id: string; status: string | null; category: string | null }>;
   const activeProducts = products.filter((p) => (p.status ?? "").toLowerCase() === "ativo").length;
@@ -136,7 +147,7 @@ async function fetchDashboardData(orgId?: string): Promise<DashboardData> {
   const saldo = receitas - despesas;
   const monthlyProfit = saldo;
 
-  const saleItems = (saleItemsRes.data ?? []) as unknown as SaleItemJoinRow[];
+  const saleItems = (saleItemsRaw ?? []) as unknown as SaleItemJoinRow[];
   const revenueMap = new Map<string, number>();
   for (const it of saleItems) {
     const createdAt = it.sales?.created_at ?? null;

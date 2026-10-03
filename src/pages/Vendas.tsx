@@ -274,7 +274,11 @@ export default function Vendas() {
         if (nextStatus !== "Cancelado") {
           const { error: delErr } = await supabase.from("sale_items").delete().eq("sale_id", saleId);
           if (delErr) throw delErr;
-          const { error: insErr } = await supabase.from("sale_items").insert(computeItemsPayload(saleId, validItems) as any);
+          const itemsPayload = computeItemsPayload(saleId, validItems).map((it) => ({
+            ...it,
+            organization_id: currentOrg?.id,
+          }));
+          const { error: insErr } = await supabase.from("sale_items").insert(itemsPayload as any);
           if (insErr) throw insErr;
         }
 
@@ -314,9 +318,9 @@ export default function Vendas() {
 
         // Financeiro: upsert quando Faturado/Entregue; ao Cancelar marca Cancelado se não estiver Pago
         if (nextMoving) {
-          await upsertReceberForSale({ saleId, clientName, amount: Number(total), nextStatus: nextStatus });
+          await upsertReceberForSale({ saleId, clientName, amount: Number(total), nextStatus: nextStatus, orgId: currentOrg?.id });
         } else if (nextStatus === "Cancelado" && wasMoving) {
-          await upsertReceberForSale({ saleId, clientName, amount: Number(total), nextStatus: "Cancelado" });
+          await upsertReceberForSale({ saleId, clientName, amount: Number(total), nextStatus: "Cancelado", orgId: currentOrg?.id });
         }
       }
     },

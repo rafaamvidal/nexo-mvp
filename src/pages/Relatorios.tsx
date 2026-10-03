@@ -119,7 +119,17 @@ async function fetchCurveA(orgId?: string): Promise<CurveAItem[]> {
     query = query.eq("organization_id", orgId);
   }
 
-  const { data, error } = await query;
+  let { data, error } = await query;
+  if (error && error.message?.includes("organization_id")) {
+    const fallback = await supabase
+      .from("sale_items")
+      .select("product_id,total,quantity,products(name),sales(status,organization_id)")
+      .limit(1000);
+    if (!fallback.error) {
+      data = (fallback.data ?? []).filter((r: any) => !r.sales?.organization_id || r.sales.organization_id === orgId);
+      error = null;
+    }
+  }
   if (error) throw error;
 
   const rows = (data ?? []) as any[];

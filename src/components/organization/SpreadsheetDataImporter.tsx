@@ -332,16 +332,21 @@ export function SpreadsheetDataImporter() {
         const toInsertSuppliers = SPREADSHEET_SUPPLIERS.filter(
           (s) => !existingNames.has(s.name.toUpperCase().trim())
         ).map((s) => ({
-          ...s,
+          name: s.name,
+          tax_id: s.document || null,
+          phone: s.phone || null,
+          email: s.email || null,
+          address: s.address || null,
+          observations: s.observations || null,
+          contact_name: s.contact_name || null,
           organization_id: orgId,
-          status: "Ativo",
         }));
 
         if (toInsertSuppliers.length > 0) {
           const { error } = await supabase.from("suppliers").insert(toInsertSuppliers);
           if (error) {
-            console.warn("Aviso ao inserir fornecedores com contact_name, tentando fallback:", error);
-            // Fallback sem contact_name se coluna não existir
+            console.warn("Aviso ao inserir fornecedores com contact_name, tentando fallback sem contact_name:", error);
+            // Fallback sem contact_name se a coluna ainda não foi criada no Supabase
             const fallbackList = toInsertSuppliers.map(({ contact_name, ...rest }) => rest);
             const { error: errFallback } = await supabase.from("suppliers").insert(fallbackList);
             if (errFallback) throw errFallback;

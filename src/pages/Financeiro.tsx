@@ -366,7 +366,19 @@ export default function Financeiro() {
       }
 
       const { error } = await supabase.from("financial_records").insert(rows as any);
-      if (error) throw error;
+      if (error) {
+        if (
+          error.message?.includes("installment_number") ||
+          error.message?.includes("total_installments") ||
+          (error as any)?.code === "PGRST204"
+        ) {
+          const fallbackRows = rows.map(({ installment_number, total_installments, ...rest }) => rest);
+          const { error: err2 } = await supabase.from("financial_records").insert(fallbackRows as any);
+          if (err2) throw err2;
+        } else {
+          throw error;
+        }
+      }
     },
     onSuccess: async () => {
       const msg =
