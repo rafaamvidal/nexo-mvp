@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Pencil, Plus, Search, ShoppingCart, Trash2 } from "lucide-react";
+import { Download, Pencil, Plus, Printer, Search, ShoppingCart, Trash2 } from "lucide-react";
 
 import { AppShell } from "@/components/layout/AppShell";
 import { Button } from "@/components/ui/button";
@@ -8,6 +8,8 @@ import { Card } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { exportToCsv } from "@/lib/exportCsv";
+import { SalePrintDialog } from "@/components/sales/SalePrintDialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -358,6 +360,23 @@ export default function Vendas() {
     });
   }, [data, q]);
 
+  const [printSaleId, setPrintSaleId] = React.useState<string | null>(null);
+
+  const handleExportCsv = () => {
+    exportToCsv({
+      filename: `vendas_${new Date().toISOString().slice(0, 10)}`,
+      headers: ["Data", "Código", "Cliente", "Status", "Valor Total (R$)"],
+      rows: (filtered ?? []).map((s) => [
+        new Date(s.created_at).toLocaleDateString("pt-BR"),
+        s.code ?? s.id.slice(0, 8),
+        s.clients?.name ?? "—",
+        s.status ?? "—",
+        s.total_amount ?? 0,
+      ]),
+    });
+    toast.success("Vendas exportadas para CSV com sucesso!");
+  };
+
   return (
     <AppShell title="Vendas">
       <section className="mx-auto max-w-6xl">
@@ -372,13 +391,25 @@ export default function Vendas() {
             <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar cliente/status…" className="pl-9" />
           </div>
 
-          <Sheet open={open} onOpenChange={setOpen}>
-            <SheetTrigger asChild>
-              <Button type="button" variant="hero" className="gap-2" onClick={openForCreate}>
-                <Plus className="h-4 w-4" />
-                Nova Venda
-              </Button>
-            </SheetTrigger>
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleExportCsv}
+              disabled={(filtered ?? []).length === 0}
+              className="gap-2"
+            >
+              <Download className="h-4 w-4" />
+              Exportar CSV
+            </Button>
+
+            <Sheet open={open} onOpenChange={setOpen}>
+              <SheetTrigger asChild>
+                <Button type="button" variant="hero" className="gap-2" onClick={openForCreate}>
+                  <Plus className="h-4 w-4" />
+                  Nova Venda
+                </Button>
+              </SheetTrigger>
             <SheetContent side="right" className="w-full sm:max-w-xl">
               <SheetHeader>
                 <SheetTitle>{editingSaleId ? "Editar Venda" : "Nova Venda"}</SheetTitle>
@@ -500,6 +531,7 @@ export default function Vendas() {
             </SheetContent>
           </Sheet>
         </div>
+      </div>
 
         {error && (
           <Card className="glass mt-5 p-6">
@@ -551,6 +583,16 @@ export default function Vendas() {
                               type="button"
                               variant="outline"
                               size="icon"
+                              aria-label="Imprimir comprovante"
+                              title="Imprimir / Visualizar Comprovante"
+                              onClick={() => setPrintSaleId(s.id)}
+                            >
+                              <Printer className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="icon"
                               aria-label="Editar"
                               onClick={() => void openForEdit(s)}
                             >
@@ -588,6 +630,16 @@ export default function Vendas() {
           )}
         </div>
       </section>
+
+      {printSaleId && (
+        <SalePrintDialog
+          open={!!printSaleId}
+          onOpenChange={(v) => {
+            if (!v) setPrintSaleId(null);
+          }}
+          saleId={printSaleId}
+        />
+      )}
     </AppShell>
   );
 }

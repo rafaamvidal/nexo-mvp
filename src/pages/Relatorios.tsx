@@ -12,7 +12,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { BarChart3 } from "lucide-react";
+import { BarChart3, Download, Printer } from "lucide-react";
 import { addMonths, endOfMonth, startOfMonth } from "date-fns";
 
 import { AppShell } from "@/components/layout/AppShell";
@@ -22,6 +22,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { exportToCsv } from "@/lib/exportCsv";
 
 function formatBRL(value: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
@@ -146,16 +147,32 @@ export default function Relatorios() {
           <div className="flex items-center gap-2">
             <Button
               type="button"
-              variant="soft"
+              variant="outline"
               onClick={() => {
-                try {
-                  window.print();
-                } catch {
-                  toast.info("Exportação: em breve");
-                }
+                const curveData = curveQ.data ?? [];
+                exportToCsv({
+                  filename: `relatorio_curva_abc_${new Date().toISOString().slice(0, 10)}`,
+                  headers: ["Posição", "Produto", "Valor Total Vendido (R$)"],
+                  rows: curveData.map((x, idx) => [idx + 1, x.product_name, x.total_value]),
+                });
+                toast.success("Relatório Curva ABC exportado em CSV!");
               }}
+              disabled={!curveQ.data || curveQ.data.length === 0}
+              className="gap-2"
             >
-              Exportar
+              <Download className="h-4 w-4" />
+              Exportar CSV
+            </Button>
+            <Button
+              type="button"
+              variant="hero"
+              onClick={() => {
+                window.print();
+              }}
+              className="gap-2"
+            >
+              <Printer className="h-4 w-4" />
+              Imprimir Relatório
             </Button>
           </div>
         </header>

@@ -1,11 +1,14 @@
 import * as React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, Pencil, Plus, Search, Trash2, XCircle } from "lucide-react";
+import { CheckCircle2, ChefHat, Download, Pencil, Plus, Search, Trash2, XCircle } from "lucide-react";
 
 import { AppShell } from "@/components/layout/AppShell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { exportToCsv } from "@/lib/exportCsv";
+import { getProductBom } from "@/lib/bom";
+import { BomManagerDialog } from "@/components/production/BomManagerDialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -95,6 +98,24 @@ export default function Producao() {
     });
   }, [data, q]);
 
+  const handleExportCsv = () => {
+    if (!filtered || filtered.length === 0) {
+      toast.error("Nenhuma ordem para exportar");
+      return;
+    }
+    const exportData = filtered.map((o) => ({
+      Codigo: o.code ?? (o.id ? o.id.slice(0, 8) : "—"),
+      Produto: o.products?.name ?? "—",
+      Quantidade: o.quantity,
+      Status: o.status ?? "—",
+      Data_Inicio: o.start_date ?? "—",
+      Data_Termino: o.end_date ?? "—",
+      Criado_Em: o.created_at ? new Date(o.created_at).toLocaleDateString("pt-BR") : "—",
+    }));
+    exportToCsv("ordens-de-fabricacao", exportData);
+    toast.success("Ordens de fabricação exportadas!");
+  };
+
   const createMO = useMutation({
     mutationFn: async () => {
       if (!productId) throw new Error("Selecione o produto final");
@@ -140,14 +161,36 @@ export default function Producao() {
       if (!mo.product_id) throw new Error("Ordem sem produto");
       if ((mo.status ?? "") === "Finalizada") return;
 
+      const orderQty = Number(mo.quantity ?? 0);
+      const codeOrId = mo.code ?? mo.id.slice(0, 8);
+
+      // 1. Dá entrada no produto final fabricado
       const { error: mvErr } = await (supabase as any).rpc("apply_movement", {
         p_product_id: mo.product_id,
         p_type: "Entrada",
-        p_quantity: Number(mo.quantity ?? 0),
-        p_reason: "Produção (Finalização)",
+        p_quantity: orderQty,
+        p_reason: `Produção Finalizada (OF #${codeOrId})`,
         p_reference_id: mo.id,
       });
       if (mvErr) throw mvErr;
+
+      // 2. Dá saída nas matérias-primas cadastradas na Ficha Técnica (BOM)
+      const bom = await getProductBom(mo.product_id);
+      for (const item of bom) {
+        if (item.rawMaterialId && item.quantityPerUnit > 0) {
+          const consumedQty = Number(item.quantityPerUnit) * orderQty;
+          const { error: rawErr } = await (supabase as any).rpc("apply_movement", {
+            p_product_id: item.rawMaterialId,
+            p_type: "Saída",
+            p_quantity: consumedQty,
+            p_reason: `Consumo Matéria-Prima (OF #${codeOrId})`,
+            p_reference_id: mo.id,
+          });
+          if (rawErr) {
+            console.warn("Aviso ao baixar insumo:", rawErr);
+          }
+        }
+      }
 
       const today = new Date().toISOString().slice(0, 10);
       const { error: upErr } = await supabase
@@ -157,11 +200,12 @@ export default function Producao() {
       if (upErr) throw upErr;
     },
     onSuccess: async () => {
-      toast.success("Ordem finalizada e estoque atualizado");
+      toast.success("Ordem finalizada: produto gerado e insumos baixados com sucesso!");
       await qc.invalidateQueries({ queryKey: ["manufacturing_orders"] });
       await qc.invalidateQueries({ queryKey: ["products"] });
+      await qc.invalidateQueries({ queryKey: ["stock_movements"] });
     },
-    onError: (e: any) => toast.error(e?.message ?? "Erro ao finalizar"),
+    onError: (e: any) => toast.error(e?.message ?? "Erro ao finalizar ordem"),
   });
 
   const cancelMO = useMutation({
@@ -170,25 +214,41 @@ export default function Producao() {
       if (prev === "Cancelada") return;
       if (!mo.product_id) throw new Error("Ordem sem produto");
 
-      // Se já finalizada, estorna o produto final (Saída)
+      // Se já finalizada, estorna o produto final (Saída) e estorna matérias-primas (Entrada)
       if (prev === "Finalizada") {
-        const { error: mvErr } = await (supabase as any).rpc("apply_movement", {
+        const orderQty = Number(mo.quantity ?? 0);
+        const codeOrId = mo.code ?? mo.id.slice(0, 8);
+
+        await (supabase as any).rpc("apply_movement", {
           p_product_id: mo.product_id,
           p_type: "Saída",
-          p_quantity: Number(mo.quantity ?? 0),
-          p_reason: "Produção (Cancelamento)",
+          p_quantity: orderQty,
+          p_reason: `Estorno Produção (Cancelamento OF #${codeOrId})`,
           p_reference_id: mo.id,
         });
-        if (mvErr) throw mvErr;
+
+        const bom = await getProductBom(mo.product_id);
+        for (const item of bom) {
+          if (item.rawMaterialId && item.quantityPerUnit > 0) {
+            await (supabase as any).rpc("apply_movement", {
+              p_product_id: item.rawMaterialId,
+              p_type: "Entrada",
+              p_quantity: Number(item.quantityPerUnit) * orderQty,
+              p_reason: `Estorno Insumo (Cancelamento OF #${codeOrId})`,
+              p_reference_id: mo.id,
+            });
+          }
+        }
       }
 
       const { error: upErr } = await supabase.from("manufacturing_orders").update({ status: "Cancelada" } as any).eq("id", mo.id);
       if (upErr) throw upErr;
     },
     onSuccess: async () => {
-      toast.success("Ordem cancelada");
+      toast.success("Ordem cancelada e estoque estornado");
       await qc.invalidateQueries({ queryKey: ["manufacturing_orders"] });
       await qc.invalidateQueries({ queryKey: ["products"] });
+      await qc.invalidateQueries({ queryKey: ["stock_movements"] });
     },
     onError: (e: any) => toast.error(e?.message ?? "Erro ao cancelar"),
   });
@@ -251,45 +311,60 @@ export default function Producao() {
               <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar produto/status…" className="pl-9" />
             </div>
 
-            <Dialog open={open} onOpenChange={setOpen}>
-              <DialogTrigger asChild>
-                <Button type="button" variant="hero" className="gap-2">
-                  <Plus className="h-4 w-4" />
-                  Nova Ordem
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-lg">
-                <DialogHeader>
-                  <DialogTitle>Nova Ordem de Fabricação</DialogTitle>
-                </DialogHeader>
-                <div className="grid gap-4">
-                  <div className="grid gap-2">
-                    <Label>Produto Final</Label>
-                    <Select value={productId} onValueChange={setProductId}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecione…" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {(finished ?? []).map((p) => (
-                          <SelectItem key={p.id} value={p.id}>
-                            {p.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                className="gap-2"
+                onClick={handleExportCsv}
+                disabled={!filtered || filtered.length === 0}
+              >
+                <Download className="h-4 w-4" />
+                Exportar CSV
+              </Button>
 
-                  <div className="grid gap-2">
-                    <Label>Quantidade planejada</Label>
-                    <Input type="number" min={1} value={quantity} onChange={(e) => setQuantity(Number(e.target.value))} />
-                  </div>
+              <BomManagerDialog />
 
-                  <Button type="button" variant="hero" onClick={() => createMO.mutate()} disabled={createMO.isPending}>
-                    Criar Ordem
+              <Dialog open={open} onOpenChange={setOpen}>
+                <DialogTrigger asChild>
+                  <Button type="button" variant="hero" className="gap-2">
+                    <Plus className="h-4 w-4" />
+                    Nova Ordem
                   </Button>
-                </div>
-              </DialogContent>
-            </Dialog>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-lg">
+                  <DialogHeader>
+                    <DialogTitle>Nova Ordem de Fabricação</DialogTitle>
+                  </DialogHeader>
+                  <div className="grid gap-4">
+                    <div className="grid gap-2">
+                      <Label>Produto Final</Label>
+                      <Select value={productId} onValueChange={setProductId}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione…" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {(finished ?? []).map((p) => (
+                            <SelectItem key={p.id} value={p.id}>
+                              {p.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="grid gap-2">
+                      <Label>Quantidade planejada</Label>
+                      <Input type="number" min={1} value={quantity} onChange={(e) => setQuantity(Number(e.target.value))} />
+                    </div>
+
+                    <Button type="button" variant="hero" onClick={() => createMO.mutate()} disabled={createMO.isPending}>
+                      Criar Ordem
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+            </div>
 
             <Dialog open={editOpen} onOpenChange={setEditOpen}>
               <DialogContent className="sm:max-w-lg">

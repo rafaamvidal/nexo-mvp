@@ -4,21 +4,33 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import DashboardHome from "./pages/DashboardHome";
-import Estoque from "./pages/Estoque";
-import Produtos from "./pages/Produtos";
-import Vendas from "./pages/Vendas";
-import Financeiro from "./pages/Financeiro";
-import Compras from "./pages/Compras";
-import Producao from "./pages/Producao";
-import Cadastros from "./pages/Cadastros";
-import Relatorios from "./pages/Relatorios";
-import Custos from "./pages/Custos";
-import NotFound from "./pages/NotFound";
-import Auth from "./pages/Auth";
 import { AuthProvider } from "@/hooks/useAuth";
+import { OrganizationProvider } from "@/contexts/OrganizationContext";
+import { CompanySetupModal } from "@/components/organization/CompanySetupModal";
 import { RequireAuth } from "@/components/auth/RequireAuth";
 import { RequireAdmin } from "@/components/auth/RequireAdmin";
+
+const DashboardHome = React.lazy(() => import("./pages/DashboardHome"));
+const Estoque = React.lazy(() => import("./pages/Estoque"));
+const Produtos = React.lazy(() => import("./pages/Produtos"));
+const Vendas = React.lazy(() => import("./pages/Vendas"));
+const Financeiro = React.lazy(() => import("./pages/Financeiro"));
+const Compras = React.lazy(() => import("./pages/Compras"));
+const Producao = React.lazy(() => import("./pages/Producao"));
+const Cadastros = React.lazy(() => import("./pages/Cadastros"));
+const Relatorios = React.lazy(() => import("./pages/Relatorios"));
+const Custos = React.lazy(() => import("./pages/Custos"));
+const NotFound = React.lazy(() => import("./pages/NotFound"));
+const Auth = React.lazy(() => import("./pages/Auth"));
+
+const PageFallback = () => (
+  <div className="flex min-h-[60vh] w-full items-center justify-center">
+    <div className="flex flex-col items-center gap-3">
+      <div className="h-8 w-8 animate-spin rounded-full border-3 border-primary border-t-transparent" />
+      <span className="text-xs font-medium text-muted-foreground animate-pulse">Carregando módulo...</span>
+    </div>
+  </div>
+);
 
 const queryClient = new QueryClient();
 
@@ -35,9 +47,12 @@ const App = () => {
         <Toaster />
         <Sonner />
         <AuthProvider>
-          <BrowserRouter>
-            <Routes>
-              <Route path="/auth" element={<Auth />} />
+          <OrganizationProvider>
+            <CompanySetupModal />
+            <BrowserRouter>
+              <React.Suspense fallback={<PageFallback />}>
+                <Routes>
+                  <Route path="/auth" element={<Auth />} />
               <Route
                 path="/"
                 element={
@@ -125,7 +140,9 @@ const App = () => {
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
             </Routes>
-          </BrowserRouter>
+          </React.Suspense>
+        </BrowserRouter>
+        </OrganizationProvider>
         </AuthProvider>
       </TooltipProvider>
     </QueryClientProvider>

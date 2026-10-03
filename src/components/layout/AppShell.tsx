@@ -5,6 +5,7 @@ import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/s
 import { Button } from "@/components/ui/button";
 import { AppSidebar } from "@/components/layout/AppSidebar";
 import { useAuth } from "@/hooks/useAuth";
+import { OrganizationSwitcher } from "@/components/organization/OrganizationSwitcher";
 
 export function AppShell({ title, children }: { title: string; children: React.ReactNode }) {
   const { user, signOut } = useAuth();
@@ -24,9 +25,12 @@ export function AppShell({ title, children }: { title: string; children: React.R
                   <p className="truncate text-xs text-muted-foreground">{user?.email ?? ""}</p>
                 </div>
               </div>
-              <Button variant="glass" size="icon" onClick={signOut} aria-label="Sair">
-                <LogOut />
-              </Button>
+              <div className="flex items-center gap-2">
+                <OrganizationSwitcher />
+                <Button variant="glass" size="icon" onClick={signOut} aria-label="Sair">
+                  <LogOut />
+                </Button>
+              </div>
             </div>
           </header>
 

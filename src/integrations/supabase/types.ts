@@ -14,6 +14,65 @@ export type Database = {
   }
   public: {
     Tables: {
+      organizations: {
+        Row: {
+          id: string
+          name: string
+          document: string | null
+          phone: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          name: string
+          document?: string | null
+          phone?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          name?: string
+          document?: string | null
+          phone?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      organization_members: {
+        Row: {
+          id: string
+          organization_id: string
+          user_id: string
+          role: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          organization_id: string
+          user_id: string
+          role?: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          organization_id?: string
+          user_id?: string
+          role?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_members_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
       clients: {
         Row: {
           address: string | null
@@ -636,6 +695,14 @@ export type Database = {
     }
     Functions: {
       accept_staff_invitation: { Args: never; Returns: undefined }
+      create_company_account: {
+        Args: { p_name: string; p_document?: string; p_phone?: string }
+        Returns: Json
+      }
+      get_user_org_ids: {
+        Args: { user_uuid: string }
+        Returns: string[]
+      }
       apply_movement:
         | {
             Args: { p_product_id: string; p_quantity: number; p_type: string }

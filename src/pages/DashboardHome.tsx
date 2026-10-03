@@ -1,6 +1,7 @@
 import * as React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { endOfMonth, format, startOfDay, startOfMonth, subDays } from "date-fns";
+import { Link } from "react-router-dom";
 import {
   Area,
   AreaChart,
@@ -12,16 +13,23 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { BarChart3, Package, Wallet } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowRight,
+  BarChart3,
+  CheckCircle2,
+  Package,
+  PackageX,
+  Wallet,
+} from "lucide-react";
 
 import { AppShell } from "@/components/layout/AppShell";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { supabase } from "@/integrations/supabase/client";
-
-function formatBRL(value: number) {
-  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
-}
+import { formatBRL } from "@/lib/masks";
 
 type DashboardData = {
   activeProducts: number;
@@ -33,6 +41,20 @@ type DashboardData = {
   receitas: number;
   despesas: number;
   saldo: number;
+  criticalStock: Array<{
+    id: string;
+    name: string;
+    current_stock: number;
+    min_stock: number;
+    unit: string;
+  }>;
+  urgentFinancial: Array<{
+    id: string;
+    description: string;
+    amount: number;
+    due_date: string;
+    type: string;
+  }>;
 };
 
 type SaleItemJoinRow = {
@@ -50,15 +72,36 @@ async function fetchDashboardData(): Promise<DashboardData> {
   const start = startOfMonth(new Date()).toISOString();
   const end = endOfMonth(new Date()).toISOString();
   const start30 = startOfDay(subDays(new Date(), 29)).toISOString();
+  const todayStr = new Date().toISOString().slice(0, 10);
 
-  const [productsRes, moRes, salesRes, finRes, saleItemsRes, sales30Res] = await Promise.all([
-    supabase.from("products").select("id,status,category", { count: "exact" }),
-    supabase.from("manufacturing_orders").select("id,status", { count: "exact" }),
-    supabase.from("sales").select("total_amount,created_at").gte("created_at", start).lte("created_at", end),
-    supabase.from("financial_records").select("amount,type,due_date").gte("due_date", start.slice(0, 10)).lte("due_date", end.slice(0, 10)),
-    supabase.from("sale_items").select("total, products(name), sales(created_at)"),
-    supabase.from("sales").select("total_amount,created_at").gte("created_at", start30).lte("created_at", new Date().toISOString()),
-  ]);
+  const [productsRes, moRes, salesRes, finRes, saleItemsRes, sales30Res, allProductsRes, urgentFinRes] =
+    await Promise.all([
+      supabase.from("products").select("id,status,category", { count: "exact" }),
+      supabase.from("manufacturing_orders").select("id,status", { count: "exact" }),
+      supabase.from("sales").select("total_amount,created_at").gte("created_at", start).lte("created_at", end),
+      supabase
+        .from("financial_records")
+        .select("amount,type,due_date")
+        .gte("due_date", start.slice(0, 10))
+        .lte("due_date", end.slice(0, 10)),
+      supabase.from("sale_items").select("total, products(name), sales(created_at)"),
+      supabase
+        .from("sales")
+        .select("total_amount,created_at")
+        .gte("created_at", start30)
+        .lte("created_at", new Date().toISOString()),
+      supabase
+        .from("products")
+        .select("id,name,current_stock,min_stock,unit,status")
+        .eq("status", "Ativo"),
+      supabase
+        .from("financial_records")
+        .select("id,description,amount,due_date,type")
+        .eq("status", "Aberto")
+        .lte("due_date", todayStr)
+        .order("due_date", { ascending: true })
+        .limit(10),
+    ]);
 
   if (productsRes.error) throw productsRes.error;
   if (moRes.error) throw moRes.error;
@@ -76,10 +119,13 @@ async function fetchDashboardData(): Promise<DashboardData> {
   const salesThisMonth = (salesRes.data ?? []).reduce((acc, s: any) => acc + Number(s.total_amount ?? 0), 0);
 
   const fin = (finRes.data ?? []) as Array<{ amount: number; type: string; due_date: string }>;
-  const receitas = fin.filter((r) => (r.type ?? "").toLowerCase() === "receber").reduce((a, r) => a + Number(r.amount ?? 0), 0);
-  const despesas = fin.filter((r) => (r.type ?? "").toLowerCase() === "pagar").reduce((a, r) => a + Number(r.amount ?? 0), 0);
+  const receitas = fin
+    .filter((r) => (r.type ?? "").toLowerCase() === "receber")
+    .reduce((a, r) => a + Number(r.amount ?? 0), 0);
+  const despesas = fin
+    .filter((r) => (r.type ?? "").toLowerCase() === "pagar")
+    .reduce((a, r) => a + Number(r.amount ?? 0), 0);
   const saldo = receitas - despesas;
-
   const monthlyProfit = saldo;
 
   const saleItems = (saleItemsRes.data ?? []) as unknown as SaleItemJoinRow[];
@@ -116,6 +162,26 @@ async function fetchDashboardData(): Promise<DashboardData> {
     return { date: d, value: running };
   });
 
+  // Alertas críticos
+  const allProds = (allProductsRes.data ?? []) as Array<{
+    id: string;
+    name: string;
+    current_stock: number;
+    min_stock: number;
+    unit: string;
+  }>;
+  const criticalStock = allProds
+    .filter((p) => Number(p.current_stock) <= Number(p.min_stock))
+    .slice(0, 5);
+
+  const urgentFinancial = ((urgentFinRes.data ?? []) as unknown as Array<{
+    id: string;
+    description: string;
+    amount: number;
+    due_date: string;
+    type: string;
+  }>).slice(0, 5);
+
   return {
     activeProducts,
     manufacturingInProgress,
@@ -126,47 +192,63 @@ async function fetchDashboardData(): Promise<DashboardData> {
     receitas,
     despesas,
     saldo,
+    criticalStock,
+    urgentFinancial,
   };
 }
 
 export default function DashboardHome() {
   const { data, isLoading, error } = useQuery({ queryKey: ["dashboard"], queryFn: fetchDashboardData });
+  const todayStr = new Date().toISOString().slice(0, 10);
+
+  const hasAlerts =
+    (data?.criticalStock && data.criticalStock.length > 0) ||
+    (data?.urgentFinancial && data.urgentFinancial.length > 0);
 
   return (
     <AppShell title="Dashboard">
-      <section className="mx-auto max-w-6xl">
+      <section className="mx-auto max-w-6xl space-y-6">
         <header className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
           <div>
             <h1 className="text-balance text-3xl font-extrabold">Visão Geral</h1>
-            <p className="mt-1 text-sm text-muted-foreground">Indicadores e visão rápida do mês atual.</p>
+            <p className="mt-1 text-sm text-muted-foreground">Indicadores e visão operacional em tempo real.</p>
           </div>
           <div className="inline-flex items-center gap-2 text-sm text-muted-foreground">
             <BarChart3 className="h-4 w-4" />
-            Dados em tempo real (Supabase)
+            Dados em tempo real
           </div>
         </header>
 
         {error && (
-          <Card className="glass mt-5 p-6">
+          <Card className="glass p-6">
             <p className="text-sm text-muted-foreground">Erro ao carregar dashboard: {(error as any)?.message ?? ""}</p>
           </Card>
         )}
 
-        <div className="mt-5 grid gap-3 md:grid-cols-4">
-          <Card className="glass border-border/60 md:col-span-1">
+        {/* 4 CARDS PRINCIPAIS */}
+        <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-4">
+          <Card className="glass border-border/60">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-semibold">Produtos Ativos</CardTitle>
+              <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                Produtos Ativos
+              </CardTitle>
               <Package className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              {isLoading ? <Skeleton className="h-8 w-24" /> : <div className="text-3xl font-extrabold">{data?.activeProducts ?? 0}</div>}
-              <p className="mt-1 text-xs text-muted-foreground">status = Ativo</p>
+              {isLoading ? (
+                <Skeleton className="h-8 w-24" />
+              ) : (
+                <div className="text-3xl font-extrabold">{data?.activeProducts ?? 0}</div>
+              )}
+              <p className="mt-1 text-xs text-muted-foreground">Cadastrados no catálogo</p>
             </CardContent>
           </Card>
 
-          <Card className="glass border-border/60 md:col-span-1">
+          <Card className="glass border-border/60">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-semibold">OFs em Produção</CardTitle>
+              <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                OFs em Produção
+              </CardTitle>
               <Package className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
@@ -175,46 +257,169 @@ export default function DashboardHome() {
               ) : (
                 <div className="text-3xl font-extrabold">{data?.manufacturingInProgress ?? 0}</div>
               )}
-              <p className="mt-1 text-xs text-muted-foreground">status = Em Produção</p>
+              <p className="mt-1 text-xs text-muted-foreground">Ordens em fabricação</p>
             </CardContent>
           </Card>
 
-          <Card className="glass border-border/60 md:col-span-1">
+          <Card className="glass border-border/60">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-semibold">Vendas do Mês</CardTitle>
+              <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                Vendas do Mês
+              </CardTitle>
               <Wallet className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               {isLoading ? (
                 <Skeleton className="h-8 w-32" />
               ) : (
-                <div className="text-3xl font-extrabold">{formatBRL(data?.salesThisMonth ?? 0)}</div>
+                <div className="text-3xl font-extrabold text-primary">{formatBRL(data?.salesThisMonth ?? 0)}</div>
               )}
-              <p className="mt-1 text-xs text-muted-foreground">Soma de sales.total_amount</p>
+              <p className="mt-1 text-xs text-muted-foreground">Faturamento bruto mensal</p>
             </CardContent>
           </Card>
 
-          <Card className="glass border-border/60 md:col-span-1">
+          <Card className="glass border-border/60">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-semibold">Lucro Mensal</CardTitle>
+              <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                Resultado Operacional
+              </CardTitle>
               <Wallet className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               {isLoading ? (
                 <Skeleton className="h-8 w-32" />
               ) : (
-                <div className="text-3xl font-extrabold">{formatBRL(data?.monthlyProfit ?? 0)}</div>
+                <div
+                  className={`text-3xl font-extrabold ${
+                    (data?.monthlyProfit ?? 0) >= 0 ? "text-emerald-600" : "text-destructive"
+                  }`}
+                >
+                  {formatBRL(data?.monthlyProfit ?? 0)}
+                </div>
               )}
-              <p className="mt-1 text-xs text-muted-foreground">Receber − Pagar</p>
+              <p className="mt-1 text-xs text-muted-foreground">Receitas − Despesas (Mês)</p>
             </CardContent>
           </Card>
         </div>
 
-        <div className="mt-5 grid gap-3 lg:grid-cols-5">
+        {/* WIDGET CENTRAL DE ATENÇÃO / ALERTAS */}
+        <Card className="glass border-border/60 overflow-hidden">
+          <CardHeader className="border-b bg-muted/20 pb-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className={`h-5 w-5 ${hasAlerts ? "text-amber-500" : "text-muted-foreground"}`} />
+                <CardTitle className="text-base font-bold">Central de Alertas & Ações Necessárias</CardTitle>
+              </div>
+              {!isLoading && !hasAlerts && (
+                <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-600 gap-1 text-xs">
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  Operação 100% em dia
+                </Badge>
+              )}
+            </div>
+          </CardHeader>
+
+          <CardContent className="p-4">
+            {isLoading ? (
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Skeleton className="h-24 rounded-lg" />
+                <Skeleton className="h-24 rounded-lg" />
+              </div>
+            ) : !hasAlerts ? (
+              <div className="flex flex-col items-center justify-center py-6 text-center text-sm text-muted-foreground">
+                <CheckCircle2 className="mb-2 h-10 w-10 text-emerald-500/60" />
+                <p className="font-semibold text-foreground">Nenhuma pendência crítica no momento</p>
+                <p className="mt-1 text-xs">
+                  Todos os produtos estão acima do estoque mínimo e não há contas vencidas para hoje.
+                </p>
+              </div>
+            ) : (
+              <div className="grid gap-4 md:grid-cols-2">
+                {/* Alerta de Estoque */}
+                <div className="rounded-xl border border-destructive/20 bg-destructive/5 p-4">
+                  <div className="flex items-center justify-between pb-2 border-b border-destructive/10">
+                    <span className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-destructive">
+                      <PackageX className="h-4 w-4" />
+                      Estoque no Limite ({data?.criticalStock.length ?? 0})
+                    </span>
+                    <Button variant="ghost" size="sm" asChild className="h-7 text-xs text-destructive hover:bg-destructive/10">
+                      <Link to="/estoque" className="gap-1">
+                        Ver Estoque <ArrowRight className="h-3 w-3" />
+                      </Link>
+                    </Button>
+                  </div>
+                  <div className="mt-2 divide-y divide-destructive/10">
+                    {data?.criticalStock.length === 0 ? (
+                      <p className="py-2 text-xs text-muted-foreground">Nenhum produto crítico.</p>
+                    ) : (
+                      data?.criticalStock.map((p) => (
+                        <div key={p.id} className="flex items-center justify-between py-2 text-xs">
+                          <span className="font-medium text-foreground truncate max-w-[180px]">{p.name}</span>
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-destructive">
+                              {p.current_stock} {p.unit}
+                            </span>
+                            <span className="text-[11px] text-muted-foreground">(Mín: {p.min_stock})</span>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                {/* Alerta de Financeiro */}
+                <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4">
+                  <div className="flex items-center justify-between pb-2 border-b border-amber-500/10">
+                    <span className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-amber-600">
+                      <AlertTriangle className="h-4 w-4" />
+                      Contas Vencidas / Hoje ({data?.urgentFinancial.length ?? 0})
+                    </span>
+                    <Button variant="ghost" size="sm" asChild className="h-7 text-xs text-amber-600 hover:bg-amber-500/10">
+                      <Link to="/financeiro" className="gap-1">
+                        Ver Financeiro <ArrowRight className="h-3 w-3" />
+                      </Link>
+                    </Button>
+                  </div>
+                  <div className="mt-2 divide-y divide-amber-500/10">
+                    {data?.urgentFinancial.length === 0 ? (
+                      <p className="py-2 text-xs text-muted-foreground">Nenhuma conta vencida ou para hoje.</p>
+                    ) : (
+                      data?.urgentFinancial.map((f) => {
+                        const isOverdue = f.due_date < todayStr;
+                        const isReceita = (f.type ?? "").toLowerCase() === "receber";
+                        return (
+                          <div key={f.id} className="flex items-center justify-between py-2 text-xs">
+                            <div className="truncate max-w-[180px]">
+                              <p className="font-medium text-foreground truncate">{f.description}</p>
+                              <span className="text-[10px] text-muted-foreground">
+                                {isOverdue ? "Venceu em: " : "Vence hoje: "}
+                                {new Date(f.due_date + "T00:00:00").toLocaleDateString("pt-BR")}
+                              </span>
+                            </div>
+                            <span
+                              className={`font-bold ${
+                                isReceita ? "text-emerald-600" : "text-rose-600"
+                              }`}
+                            >
+                              {formatBRL(f.amount)}
+                            </span>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* GRÁFICOS: TOP PRODUTOS E FLUXO DE CAIXA */}
+        <div className="grid gap-3 lg:grid-cols-5">
           <Card className="glass border-border/60 lg:col-span-3">
             <CardHeader className="pb-2">
-              <CardTitle className="text-base font-bold">Top 5 Produtos (Receita)</CardTitle>
-              <p className="text-xs text-muted-foreground">Soma de sale_items.total no mês atual</p>
+              <CardTitle className="text-base font-bold">Top 5 Produtos por Receita</CardTitle>
+              <p className="text-xs text-muted-foreground">Mais vendidos no mês atual</p>
             </CardHeader>
             <CardContent className="h-[300px]">
               {isLoading ? (
@@ -253,84 +458,105 @@ export default function DashboardHome() {
 
           <Card className="glass border-border/60 lg:col-span-2">
             <CardHeader className="pb-2">
-              <CardTitle className="text-base font-bold">Fluxo de Caixa</CardTitle>
-              <p className="text-xs text-muted-foreground">Baseado em financial_records (mês)</p>
+              <CardTitle className="text-base font-bold">Fluxo de Caixa Mensal</CardTitle>
+              <p className="text-xs text-muted-foreground">Entradas e saídas registradas no período</p>
             </CardHeader>
             <CardContent>
               <div className="grid gap-3">
                 <div className="rounded-xl border border-border/60 bg-card p-4">
-                  <div className="text-xs font-semibold text-muted-foreground">Receitas</div>
-                  {isLoading ? <Skeleton className="mt-2 h-7 w-32" /> : <div className="mt-1 text-2xl font-extrabold text-primary">{formatBRL(data?.receitas ?? 0)}</div>}
+                  <div className="text-xs font-semibold text-muted-foreground">Receitas do Mês</div>
+                  {isLoading ? (
+                    <Skeleton className="mt-2 h-7 w-32" />
+                  ) : (
+                    <div className="mt-1 text-2xl font-extrabold text-emerald-600">
+                      {formatBRL(data?.receitas ?? 0)}
+                    </div>
+                  )}
                 </div>
                 <div className="rounded-xl border border-border/60 bg-card p-4">
-                  <div className="text-xs font-semibold text-muted-foreground">Despesas</div>
-                  {isLoading ? <Skeleton className="mt-2 h-7 w-32" /> : <div className="mt-1 text-2xl font-extrabold text-destructive">{formatBRL(data?.despesas ?? 0)}</div>}
+                  <div className="text-xs font-semibold text-muted-foreground">Despesas do Mês</div>
+                  {isLoading ? (
+                    <Skeleton className="mt-2 h-7 w-32" />
+                  ) : (
+                    <div className="mt-1 text-2xl font-extrabold text-rose-600">
+                      {formatBRL(data?.despesas ?? 0)}
+                    </div>
+                  )}
                 </div>
                 <div className="rounded-xl border border-border/60 bg-card p-4">
-                  <div className="text-xs font-semibold text-muted-foreground">Saldo</div>
-                  {isLoading ? <Skeleton className="mt-2 h-7 w-32" /> : <div className="mt-1 text-2xl font-extrabold">{formatBRL(data?.saldo ?? 0)}</div>}
+                  <div className="text-xs font-semibold text-muted-foreground">Saldo Líquido</div>
+                  {isLoading ? (
+                    <Skeleton className="mt-2 h-7 w-32" />
+                  ) : (
+                    <div
+                      className={`mt-1 text-2xl font-extrabold ${
+                        (data?.saldo ?? 0) >= 0 ? "text-primary" : "text-destructive"
+                      }`}
+                    >
+                      {formatBRL(data?.saldo ?? 0)}
+                    </div>
+                  )}
                 </div>
               </div>
             </CardContent>
           </Card>
         </div>
 
-        <div className="mt-5">
-          <Card className="glass border-border/60">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base font-bold">Evolução de Vendas (Últimos 30 Dias)</CardTitle>
-              <p className="text-xs text-muted-foreground">Acumulado diário (soma cumulativa)</p>
-            </CardHeader>
-            <CardContent className="h-[320px]">
-              {isLoading ? (
-                <Skeleton className="h-full w-full" />
-              ) : (
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={data?.salesEvolution30d ?? []} margin={{ top: 12, right: 16, bottom: 8, left: 8 }}>
-                    <defs>
-                      <linearGradient id="sales30dGradient" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="hsl(var(--chart-indigo))" stopOpacity={0.55} />
-                        <stop offset="95%" stopColor="hsl(var(--chart-indigo))" stopOpacity={0.02} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis
-                      dataKey="date"
-                      tickFormatter={(d) => {
-                        const dt = new Date(`${d}T00:00:00`);
-                        return format(dt, "dd/MM");
-                      }}
-                      axisLine={false}
-                      tickLine={false}
-                      minTickGap={20}
-                    />
-                    <YAxis
-                      tickFormatter={(v) => formatBRL(Number(v) || 0)}
-                      axisLine={false}
-                      tickLine={false}
-                      width={90}
-                    />
-                    <RechartsTooltip
-                      formatter={(value: any) => formatBRL(Number(value) || 0)}
-                      labelFormatter={(d) => {
-                        const dt = new Date(`${d}T00:00:00`);
-                        return format(dt, "dd/MM/yyyy");
-                      }}
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="value"
-                      stroke="hsl(var(--chart-indigo))"
-                      fillOpacity={1}
-                      fill="url(#sales30dGradient)"
-                      strokeWidth={2}
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
-              )}
-            </CardContent>
-          </Card>
-        </div>
+        {/* EVOLUÇÃO DE VENDAS (30 DIAS) */}
+        <Card className="glass border-border/60">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base font-bold">Evolução de Vendas (Últimos 30 Dias)</CardTitle>
+            <p className="text-xs text-muted-foreground">Receita acumulada diária</p>
+          </CardHeader>
+          <CardContent className="h-[320px]">
+            {isLoading ? (
+              <Skeleton className="h-full w-full" />
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={data?.salesEvolution30d ?? []} margin={{ top: 12, right: 16, bottom: 8, left: 8 }}>
+                  <defs>
+                    <linearGradient id="sales30dGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="hsl(var(--chart-indigo))" stopOpacity={0.55} />
+                      <stop offset="95%" stopColor="hsl(var(--chart-indigo))" stopOpacity={0.02} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis
+                    dataKey="date"
+                    tickFormatter={(d) => {
+                      const dt = new Date(`${d}T00:00:00`);
+                      return format(dt, "dd/MM");
+                    }}
+                    axisLine={false}
+                    tickLine={false}
+                    minTickGap={20}
+                  />
+                  <YAxis
+                    tickFormatter={(v) => formatBRL(Number(v) || 0)}
+                    axisLine={false}
+                    tickLine={false}
+                    width={90}
+                  />
+                  <RechartsTooltip
+                    formatter={(value: any) => formatBRL(Number(value) || 0)}
+                    labelFormatter={(d) => {
+                      const dt = new Date(`${d}T00:00:00`);
+                      return format(dt, "dd/MM/yyyy");
+                    }}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="value"
+                    stroke="hsl(var(--chart-indigo))"
+                    fillOpacity={1}
+                    fill="url(#sales30dGradient)"
+                    strokeWidth={2}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            )}
+          </CardContent>
+        </Card>
       </section>
     </AppShell>
   );
