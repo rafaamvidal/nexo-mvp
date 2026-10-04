@@ -1,6 +1,11 @@
 import { describe, it, expect } from "vitest";
 import { PRODUCT_TYPES } from "@/types/inventory";
 import { parseBRDecimal } from "@/components/inventory/ProductFormSheet";
+import {
+  resolveProductClassification,
+  encodeProductClassificationFallback,
+  isProductsTypeCheckError,
+} from "@/lib/productClassification";
 import { z } from "zod";
 
 describe("Product Classifications & Brazilian Decimal Parsing", () => {
@@ -68,22 +73,54 @@ describe("Product Classifications & Brazilian Decimal Parsing", () => {
     }
   });
 
-  it("should validate and allow packaging and labels as product types", () => {
-    const packaging = {
-      name: "Caixa de Papelão 50 un",
-      type: "Embalagem",
+  it("should correctly identify Postgres products_type_check error", () => {
+    const error1 = {
+      message: 'new row for relation "products" violates check constraint "products_type_check"',
+      code: "23514",
     };
-    const label = {
-      name: "Rótulo Adesivo Don Juan",
-      type: "Rótulo / Etiqueta",
+    const error2 = {
+      message: "some other constraint failed",
+      code: "23514",
     };
-    const utensil = {
-      name: "Forma de Policarbonato Trufa",
-      type: "Utensílio / Ferramenta",
+    const error3 = {
+      message: "violates check constraint products_type_check",
+    };
+    const harmlessError = {
+      message: "Network error",
     };
 
-    expect(PRODUCT_TYPES.includes(packaging.type as any)).toBe(true);
-    expect(PRODUCT_TYPES.includes(label.type as any)).toBe(true);
-    expect(PRODUCT_TYPES.includes(utensil.type as any)).toBe(true);
+    expect(isProductsTypeCheckError(error1)).toBe(true);
+    expect(isProductsTypeCheckError(error2)).toBe(true);
+    expect(isProductsTypeCheckError(error3)).toBe(true);
+    expect(isProductsTypeCheckError(harmlessError)).toBe(false);
+  });
+
+  it("should encode and resolve product classification fallback seamlessly", () => {
+    // 1. Encoding fallback when DB has old check constraint
+    const encoded = encodeProductClassificationFallback({
+      type: "Embalagem",
+      category: "Caixas e Pacotes",
+    });
+
+    expect(encoded.type).toBe("Matéria-Prima"); // Satisfies DB constraint!
+    expect(encoded.category).toBe("[Tipo: Embalagem] Caixas e Pacotes");
+
+    // 2. Resolving fallback back to original classification
+    const resolved = resolveProductClassification({
+      type: encoded.type,
+      category: encoded.category,
+    });
+
+    expect(resolved.type).toBe("Embalagem");
+    expect(resolved.category).toBe("Caixas e Pacotes");
+
+    // 3. Directly saved type (when DB constraint is updated/dropped)
+    const directResolved = resolveProductClassification({
+      type: "Utensílio / Ferramenta",
+      category: "Formas de Chocolate",
+    });
+
+    expect(directResolved.type).toBe("Utensílio / Ferramenta");
+    expect(directResolved.category).toBe("Formas de Chocolate");
   });
 });

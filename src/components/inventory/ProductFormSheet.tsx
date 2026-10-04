@@ -24,6 +24,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { supabase } from "@/integrations/supabase/client";
 import { PRODUCT_TYPES, type ProductType } from "@/types/inventory";
 import { useOrganization } from "@/contexts/OrganizationContext";
+import {
+  resolveProductClassification,
+  encodeProductClassificationFallback,
+  isProductsTypeCheckError,
+} from "@/lib/productClassification";
 
 function normalizeName(name: string) {
   return String(name ?? "")
@@ -216,10 +221,15 @@ export function ProductFormSheet({
       return;
     }
 
+    const resolved = resolveProductClassification({
+      type: product.type,
+      category: product.category,
+    });
+
     form.reset({
       name: product.name,
-      type: product.type || "Produto Final",
-      category: product.category ?? "",
+      type: resolved.type,
+      category: resolved.category ?? "",
       unit: product.unit || "un",
       current_stock: Number(product.current_stock ?? 0),
       min_stock: Number(product.min_stock ?? 0),
@@ -243,7 +253,20 @@ export function ProductFormSheet({
       };
 
       const { error } = await supabase.from("products").update(payload).eq("id", id);
-      if (error) throw error;
+      if (error && isProductsTypeCheckError(error)) {
+        console.warn("products_type_check disparado na reativação. Aplicando fallback compatível...");
+        const fallback = encodeProductClassificationFallback({
+          type: values.type,
+          category: values.category,
+        });
+        const { error: retryErr } = await supabase
+          .from("products")
+          .update({ ...payload, type: fallback.type, category: fallback.category })
+          .eq("id", id);
+        if (retryErr) throw retryErr;
+      } else if (error) {
+        throw error;
+      }
     },
     onSuccess: async () => {
       toast.success("Produto reativado com sucesso!");
@@ -292,8 +315,30 @@ export function ProductFormSheet({
         ? supabase.from("products").update(payload).eq("id", product.id)
         : supabase.from("products").insert(payload);
 
-      const { error } = await query;
-      if (error) {
+      let { error } = await query;
+      if (error && isProductsTypeCheckError(error)) {
+        console.warn("products_type_check disparado no banco. Aplicando compatibilidade transparente...");
+        const fallback = encodeProductClassificationFallback({
+          type: values.type,
+          category: values.category,
+        });
+
+        const fallbackPayload = {
+          ...payload,
+          type: fallback.type,
+          category: fallback.category,
+        };
+
+        const retryQuery = product
+          ? supabase.from("products").update(fallbackPayload).eq("id", product.id)
+          : supabase.from("products").insert(fallbackPayload);
+
+        const retryResult = await retryQuery;
+        if (retryResult.error) {
+          console.error("Falha no fallback de produto:", retryResult.error);
+          throw retryResult.error;
+        }
+      } else if (error) {
         console.error("Falha ao salvar produto no Supabase:", error);
         throw error;
       }

@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { supabase } from "@/integrations/supabase/client";
 import type { ProductRow, ProductType } from "@/types/inventory";
+import { resolveProductClassification } from "@/lib/productClassification";
 import { ProductFormSheet, type EditableProduct } from "@/components/inventory/ProductFormSheet";
 import { StockQuickAdjust } from "@/components/inventory/StockQuickAdjust";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -72,11 +73,22 @@ export default function Dashboard() {
   const [filter, setFilter] = React.useState<Filter>("Todos");
   const { data, isLoading, error } = useQuery({ queryKey: ["products"], queryFn: fetchProducts });
 
+  const resolvedData = React.useMemo(() => {
+    return (data ?? []).map((p) => {
+      const resolved = resolveProductClassification(p);
+      return {
+        ...p,
+        type: resolved.type,
+        category: resolved.category,
+      };
+    });
+  }, [data]);
+
   const products = React.useMemo(() => {
-    if (!data) return [];
-    if (filter === "Todos") return data;
-    return data.filter((p) => p.type === filter);
-  }, [data, filter]);
+    if (!resolvedData) return [];
+    if (filter === "Todos") return resolvedData;
+    return resolvedData.filter((p) => p.type === filter);
+  }, [resolvedData, filter]);
 
   const lowStockCount = React.useMemo(
     () => (data ?? []).filter((p) => Number(p.current_stock) < Number(p.min_stock)).length,

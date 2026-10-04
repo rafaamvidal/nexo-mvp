@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { supabase } from "@/integrations/supabase/client";
 import type { ProductRow, ProductType } from "@/types/inventory";
+import { resolveProductClassification } from "@/lib/productClassification";
 import { ProductFormSheet, type EditableProduct } from "@/components/inventory/ProductFormSheet";
 import { BomManagerDialog } from "@/components/production/BomManagerDialog";
 import { SpreadsheetDataImporter } from "@/components/organization/SpreadsheetDataImporter";
@@ -108,17 +109,33 @@ export default function Produtos() {
     enabled: Boolean(currentOrg?.id),
   });
 
-  const activeProducts = React.useMemo(() => {
-    return (data ?? []).filter((p) => (p.status ?? "Ativo") !== "Inativo");
+  const resolvedProducts = React.useMemo(() => {
+    return (data ?? []).map((p) => {
+      const resolved = resolveProductClassification(p);
+      return {
+        ...p,
+        type: resolved.type,
+        category: resolved.category,
+      };
+    });
   }, [data]);
 
+  const activeProducts = React.useMemo(() => {
+    return resolvedProducts.filter((p) => (p.status ?? "Ativo") !== "Inativo");
+  }, [resolvedProducts]);
+
   const products = React.useMemo(() => {
-    const list = showInactive ? data ?? [] : activeProducts;
+    const list = showInactive ? resolvedProducts : activeProducts;
     const term = q.trim().toLowerCase();
     const byType = filter === "Todos" ? list : list.filter((p) => p.type === filter);
     if (!term) return byType;
-    return byType.filter((p) => p.name.toLowerCase().includes(term) || (p.category ?? "").toLowerCase().includes(term));
-  }, [activeProducts, data, filter, q, showInactive]);
+    return byType.filter(
+      (p) =>
+        p.name.toLowerCase().includes(term) ||
+        (p.category ?? "").toLowerCase().includes(term) ||
+        p.type.toLowerCase().includes(term)
+    );
+  }, [activeProducts, resolvedProducts, filter, q, showInactive]);
 
   const lowStockCount = React.useMemo(
     () => activeProducts.filter((p) => Number(p.current_stock) < Number(p.min_stock)).length,
