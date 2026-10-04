@@ -5,13 +5,16 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
+import { cn } from "@/lib/utils";
 
 export function StockQuickAdjust({
   productId,
   step = 1,
+  className,
 }: {
   productId: string;
   step?: number;
+  className?: string;
 }) {
   const qc = useQueryClient();
 
@@ -30,26 +33,30 @@ export function StockQuickAdjust({
   });
 
   return (
-    <div className="inline-flex items-center gap-1">
+    <div className={cn("inline-flex items-center gap-0.5", className)}>
       <Button
         type="button"
         variant="glass"
-        size="icon"
+        size="sm"
         aria-label="Diminuir estoque"
+        title="Diminuir estoque"
+        className="h-8 w-8 p-0"
         disabled={mutation.isPending}
         onClick={() => mutation.mutate(-Math.abs(step))}
       >
-        <Minus />
+        <Minus className="h-3.5 w-3.5" />
       </Button>
       <Button
         type="button"
         variant="hero"
-        size="icon"
+        size="sm"
         aria-label="Aumentar estoque"
+        title="Aumentar estoque"
+        className="h-8 w-8 p-0"
         disabled={mutation.isPending}
         onClick={() => mutation.mutate(Math.abs(step))}
       >
-        <Plus />
+        <Plus className="h-3.5 w-3.5" />
       </Button>
     </div>
   );

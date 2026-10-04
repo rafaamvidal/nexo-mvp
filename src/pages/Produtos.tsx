@@ -170,23 +170,23 @@ export default function Produtos() {
   const getTypeBadge = React.useCallback((type: ProductType | string) => {
     switch (type) {
       case "Produto Final":
-        return <Badge className="bg-primary/90 text-primary-foreground">Produto Final</Badge>;
+        return <Badge className="whitespace-nowrap text-[11px] py-0.5 px-2 font-medium bg-primary/90 text-primary-foreground">Produto Final</Badge>;
       case "Matéria-Prima":
-        return <Badge variant="secondary">Matéria-Prima</Badge>;
+        return <Badge variant="secondary" className="whitespace-nowrap text-[11px] py-0.5 px-2 font-medium">Matéria-Prima</Badge>;
       case "Embalagem":
-        return <Badge className="bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/30">Embalagem</Badge>;
+        return <Badge className="whitespace-nowrap text-[11px] py-0.5 px-2 font-medium bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/30">Embalagem</Badge>;
       case "Rótulo / Etiqueta":
-        return <Badge className="bg-purple-500/15 text-purple-700 dark:text-purple-400 border border-purple-500/30">Rótulo / Etiqueta</Badge>;
+        return <Badge className="whitespace-nowrap text-[11px] py-0.5 px-2 font-medium bg-purple-500/15 text-purple-700 dark:text-purple-400 border border-purple-500/30">Rótulo / Etiqueta</Badge>;
       case "Insumo de Produção":
-        return <Badge className="bg-sky-500/15 text-sky-700 dark:text-sky-400 border border-sky-500/30">Insumo Produtivo</Badge>;
+        return <Badge className="whitespace-nowrap text-[11px] py-0.5 px-2 font-medium bg-sky-500/15 text-sky-700 dark:text-sky-400 border border-sky-500/30">Insumo Produtivo</Badge>;
       case "Utensílio / Ferramenta":
-        return <Badge className="bg-orange-500/15 text-orange-700 dark:text-orange-400 border border-orange-500/30">Utensílio</Badge>;
+        return <Badge className="whitespace-nowrap text-[11px] py-0.5 px-2 font-medium bg-orange-500/15 text-orange-700 dark:text-orange-400 border border-orange-500/30">Utensílio</Badge>;
       case "Limpeza e Higiene":
-        return <Badge className="bg-teal-500/15 text-teal-700 dark:text-teal-400 border border-teal-500/30">Limpeza / Higiene</Badge>;
+        return <Badge className="whitespace-nowrap text-[11px] py-0.5 px-2 font-medium bg-teal-500/15 text-teal-700 dark:text-teal-400 border border-teal-500/30">Limpeza / Higiene</Badge>;
       case "Material de Apoio":
-        return <Badge variant="outline">Material de Apoio</Badge>;
+        return <Badge variant="outline" className="whitespace-nowrap text-[11px] py-0.5 px-2 font-medium">Material de Apoio</Badge>;
       default:
-        return <Badge variant="outline">{type || "Outro"}</Badge>;
+        return <Badge variant="outline" className="whitespace-nowrap text-[11px] py-0.5 px-2 font-medium">{type || "Outro"}</Badge>;
     }
   }, []);
 
@@ -339,151 +339,179 @@ export default function Produtos() {
 
           {!isLoading && !error && products.length > 0 && (
             <Card className="glass overflow-hidden rounded-xl border border-border/60">
-              <Table containerClassName="max-h-[460px] md:max-h-[500px] lg:max-h-[calc(100vh-320px)] overflow-y-auto overflow-x-auto">
+              <Table containerClassName="max-h-[460px] md:max-h-[500px] lg:max-h-[calc(100vh-320px)] overflow-y-auto">
                 <TableHeader className="sticky top-0 z-10 bg-card/95 backdrop-blur shadow-sm [&_th]:bg-card/95 [&_th]:backdrop-blur">
                   <TableRow>
-                      <TableHead>Nome</TableHead>
-                      <TableHead>Categoria</TableHead>
-                      <TableHead>Tipo</TableHead>
-                      <TableHead className="text-right">Estoque atual</TableHead>
-                      <TableHead className="text-right">Custo unitário</TableHead>
-                      <TableHead className="text-right">Preço</TableHead>
-                      <TableHead className="text-right">Ações</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {products.map((p) => {
-                      const low = Number(p.current_stock) < Number(p.min_stock);
-                      const inactive = (p.status ?? "Ativo") === "Inativo";
-                      const pkg = parsePackageMetadata(p.description);
-                      return (
-                        <TableRow key={p.id} className="odd:bg-muted/20">
-                          <TableCell className="font-semibold">
-                            <div className="flex items-center gap-2">
-                              <span className="truncate">{p.name}</span>
-                              {low && <Badge variant="destructive">Baixo</Badge>}
-                              {showInactive && inactive && <Badge variant="outline">Inativo</Badge>}
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-muted-foreground">{p.category ?? "—"}</TableCell>
-                          <TableCell>{getTypeBadge(p.type)}</TableCell>
-                          <TableCell className={"text-right font-bold " + (low ? "text-destructive" : "")}>
-                            <div>
-                              {p.current_stock}
-                              <span className="ml-1 text-xs font-normal text-muted-foreground">{p.unit}</span>
-                            </div>
-                            {Number(p.current_stock) > 0 && Number(p.price_cost ?? 0) > 0 && (
-                              <span className="text-[11px] font-normal text-muted-foreground block">
-                                Total: {formatBRL(Number(p.current_stock) * Number(p.price_cost))}
-                              </span>
-                            )}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <div className="font-medium">
-                              {formatBRL(Number(p.price_cost ?? 0))}
-                              <span className="text-xs font-normal text-muted-foreground">/{p.unit}</span>
-                            </div>
-                            {pkg && (
-                              <span
-                                className="text-[11px] text-muted-foreground block truncate max-w-[140px] ml-auto"
-                                title={formatPackageSummary(pkg, p.unit)}
-                              >
-                                {pkg.packageName} {pkg.packageSize}{p.unit}
-                              </span>
-                            )}
-                          </TableCell>
-                          <TableCell className="text-right">{formatBRL(Number(p.price_sale ?? 0))}</TableCell>
-                          <TableCell className="text-right">
-                            <div className="inline-flex items-center gap-2">
-                              {p.type === "Produto Final" && (
-                                <BomManagerDialog
-                                  defaultProductId={p.id}
-                                  trigger={
-                                    <Button type="button" variant="outline" size="icon" title="Ficha Técnica / Receita">
-                                      <ChefHat className="h-4 w-4 text-primary" />
-                                    </Button>
-                                  }
-                                />
-                              )}
-                              <ProductFormSheet
-                                product={mappedEditable(p)}
-                                trigger={
-                                  <Button type="button" variant="outline" size="icon" aria-label="Editar">
-                                    <Pencil className="h-4 w-4" />
-                                  </Button>
-                                }
-                              />
-                              <PriceHistoryDialog
-                                productId={p.id}
-                                productName={p.name}
-                                productUnit={p.unit}
-                                productType={p.type}
-                                currentCost={p.price_cost}
+                    <TableHead className="py-2.5 px-3">Nome</TableHead>
+                    <TableHead className="py-2.5 px-2 hidden md:table-cell">Categoria</TableHead>
+                    <TableHead className="py-2.5 px-2">Tipo</TableHead>
+                    <TableHead className="py-2.5 px-3 text-right">Estoque atual</TableHead>
+                    <TableHead className="py-2.5 px-3 text-right">Custo unitário</TableHead>
+                    <TableHead className="py-2.5 px-3 text-right hidden sm:table-cell">Preço</TableHead>
+                    <TableHead className="py-2.5 px-3 text-right">Ações</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {products.map((p) => {
+                    const low = Number(p.current_stock) < Number(p.min_stock);
+                    const inactive = (p.status ?? "Ativo") === "Inativo";
+                    const pkg = parsePackageMetadata(p.description);
+                    return (
+                      <TableRow key={p.id} className="odd:bg-muted/20">
+                        <TableCell className="py-2.5 px-3 font-semibold">
+                          <div className="flex items-center gap-1.5 min-w-0 max-w-[170px] sm:max-w-[210px] md:max-w-[240px] lg:max-w-[280px]">
+                            <span className="truncate text-sm font-semibold" title={p.name}>{p.name}</span>
+                            {low && <Badge variant="destructive" className="shrink-0 text-[10px] px-1 py-0">Baixo</Badge>}
+                            {showInactive && inactive && <Badge variant="outline" className="shrink-0 text-[10px] px-1 py-0">Inativo</Badge>}
+                          </div>
+                        </TableCell>
+                        <TableCell className="py-2.5 px-2 hidden md:table-cell text-xs text-muted-foreground truncate max-w-[120px]">
+                          {p.category ?? "—"}
+                        </TableCell>
+                        <TableCell className="py-2.5 px-2 whitespace-nowrap">
+                          {getTypeBadge(p.type)}
+                        </TableCell>
+                        <TableCell className={"py-2.5 px-3 text-right font-bold whitespace-nowrap " + (low ? "text-destructive" : "")}>
+                          <div>
+                            {p.current_stock}
+                            <span className="ml-1 text-xs font-normal text-muted-foreground">{p.unit}</span>
+                          </div>
+                          {Number(p.current_stock) > 0 && Number(p.price_cost ?? 0) > 0 && (
+                            <span className="text-[11px] font-normal text-muted-foreground block">
+                              Total: {formatBRL(Number(p.current_stock) * Number(p.price_cost))}
+                            </span>
+                          )}
+                        </TableCell>
+                        <TableCell className="py-2.5 px-3 text-right whitespace-nowrap">
+                          <div className="font-medium">
+                            {formatBRL(Number(p.price_cost ?? 0))}
+                            <span className="text-xs font-normal text-muted-foreground">/{p.unit}</span>
+                          </div>
+                          {pkg && (
+                            <span
+                              className="text-[11px] text-muted-foreground block truncate max-w-[120px] ml-auto"
+                              title={formatPackageSummary(pkg, p.unit)}
+                            >
+                              {pkg.packageName} {pkg.packageSize}{p.unit}
+                            </span>
+                          )}
+                        </TableCell>
+                        <TableCell className="py-2.5 px-3 text-right whitespace-nowrap hidden sm:table-cell">
+                          {formatBRL(Number(p.price_sale ?? 0))}
+                        </TableCell>
+                        <TableCell className="py-2.5 px-3 text-right whitespace-nowrap">
+                          <div className="inline-flex items-center justify-end gap-1">
+                            {p.type === "Produto Final" && (
+                              <BomManagerDialog
+                                defaultProductId={p.id}
                                 trigger={
                                   <Button
                                     type="button"
                                     variant="outline"
-                                    size="icon"
-                                    title="Histórico de Preços e Sazonalidade"
-                                    className="hover:text-emerald-600 hover:border-emerald-500/40"
+                                    size="sm"
+                                    title="Ficha Técnica / Receita"
+                                    className="h-8 w-8 p-0"
                                   >
-                                    <TrendingUp className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                                    <ChefHat className="h-4 w-4 text-primary" />
                                   </Button>
                                 }
                               />
-                              {showInactive && inactive && (
+                            )}
+                            <ProductFormSheet
+                              product={mappedEditable(p)}
+                              trigger={
                                 <Button
                                   type="button"
                                   variant="outline"
-                                  size="icon"
-                                  aria-label="Reativar"
-                                  onClick={() => reactivateMutation.mutate(p.id)}
-                                  disabled={reactivateMutation.isPending}
+                                  size="sm"
+                                  aria-label="Editar"
+                                  title="Editar produto"
+                                  className="h-8 w-8 p-0"
                                 >
-                                  <RefreshCw className="h-4 w-4" />
+                                  <Pencil className="h-4 w-4" />
                                 </Button>
-                              )}
-                              <AlertDialog>
-                                <AlertDialogTrigger asChild>
-                                  <Button type="button" variant="outline" size="icon" aria-label="Excluir">
-                                    <Trash2 className="h-4 w-4" />
-                                  </Button>
-                                </AlertDialogTrigger>
-                                <AlertDialogContent>
-                                  <AlertDialogHeader>
-                                    <AlertDialogTitle>Excluir produto?</AlertDialogTitle>
-                                    <AlertDialogDescription>
-                                      Esta ação não pode ser desfeita. O produto será removido do cadastro.
-                                    </AlertDialogDescription>
-                                  </AlertDialogHeader>
-                                  <AlertDialogFooter>
-                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                    <AlertDialogAction
-                                      onClick={() => {
-                                        deleteMutation.mutate(p.id, {
-                                          onError: (e: any) => {
-                                            if (isForeignKeyViolation(e)) {
-                                              setInactivateTarget({ id: p.id, name: p.name });
-                                              return;
-                                            }
-                                          },
-                                        });
-                                      }}
-                                      disabled={deleteMutation.isPending}
-                                    >
-                                      Excluir
-                                    </AlertDialogAction>
-                                  </AlertDialogFooter>
-                                </AlertDialogContent>
-                              </AlertDialog>
-                              <StockQuickAdjust productId={p.id} />
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
+                              }
+                            />
+                            <PriceHistoryDialog
+                              productId={p.id}
+                              productName={p.name}
+                              productUnit={p.unit}
+                              productType={p.type}
+                              currentCost={p.price_cost}
+                              trigger={
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  title="Histórico de Preços e Sazonalidade"
+                                  className="h-8 w-8 p-0 hover:text-emerald-600 hover:border-emerald-500/40"
+                                >
+                                  <TrendingUp className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                                </Button>
+                              }
+                            />
+                            {showInactive && inactive && (
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                aria-label="Reativar"
+                                title="Reativar produto"
+                                onClick={() => reactivateMutation.mutate(p.id)}
+                                disabled={reactivateMutation.isPending}
+                                className="h-8 w-8 p-0"
+                              >
+                                <RefreshCw className="h-4 w-4" />
+                              </Button>
+                            )}
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  aria-label="Excluir"
+                                  title="Excluir produto"
+                                  className="h-8 w-8 p-0 hover:text-destructive hover:border-destructive/40"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Excluir produto?</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Esta ação não pode ser desfeita. O produto será removido do cadastro.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    onClick={() => {
+                                      deleteMutation.mutate(p.id, {
+                                        onError: (e: any) => {
+                                          if (isForeignKeyViolation(e)) {
+                                            setInactivateTarget({ id: p.id, name: p.name });
+                                            return;
+                                          }
+                                        },
+                                      });
+                                    }}
+                                    disabled={deleteMutation.isPending}
+                                  >
+                                    Excluir
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                            <StockQuickAdjust productId={p.id} />
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
                 <div className="flex items-center justify-between border-t border-border/60 px-4 py-2.5 text-xs text-muted-foreground bg-muted/20">
                   <span>
                     Mostrando <strong className="text-foreground">{products.length}</strong> de{" "}

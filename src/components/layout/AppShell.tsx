@@ -15,7 +15,7 @@ export function AppShell({ title, children }: { title: string; children: React.R
       <div className="min-h-svh flex w-full">
         <AppSidebar />
 
-        <SidebarInset>
+        <SidebarInset className="min-w-0 max-w-full overflow-x-hidden">
           <header className="sticky top-0 z-10">
             <div className="glass mx-3 mt-3 flex items-center justify-between rounded-xl px-3 py-2">
               <div className="flex items-center gap-2">
@@ -34,7 +34,7 @@ export function AppShell({ title, children }: { title: string; children: React.R
             </div>
           </header>
 
-          <main className="px-3 pb-8 pt-4 md:px-6">{children}</main>
+          <main className="min-w-0 max-w-full px-3 pb-8 pt-4 md:px-6">{children}</main>
         </SidebarInset>
       </div>
     </SidebarProvider>
