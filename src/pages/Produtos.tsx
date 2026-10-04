@@ -62,9 +62,20 @@ async function fetchProducts(orgId?: string): Promise<Product[]> {
 }
 
 function FilterChips({ value, onChange }: { value: Filter; onChange: (v: Filter) => void }) {
-  const items: Filter[] = ["Todos", "Matéria-Prima", "Produto Final"];
+  const items: Filter[] = [
+    "Todos",
+    "Produto Final",
+    "Matéria-Prima",
+    "Embalagem",
+    "Rótulo / Etiqueta",
+    "Insumo de Produção",
+    "Utensílio / Ferramenta",
+    "Limpeza e Higiene",
+    "Material de Apoio",
+    "Outro",
+  ];
   return (
-    <div className="flex flex-wrap gap-2">
+    <div className="flex flex-wrap gap-1.5">
       {items.map((it) => {
         const active = it === value;
         return (
@@ -74,7 +85,7 @@ function FilterChips({ value, onChange }: { value: Filter; onChange: (v: Filter)
             variant={active ? "soft" : "outline"}
             size="sm"
             onClick={() => onChange(it)}
-            className="rounded-full"
+            className="rounded-full text-xs h-7 px-3"
           >
             {it}
           </Button>
@@ -136,9 +147,27 @@ export default function Produtos() {
     };
   }, []);
 
-  const getTypeBadge = React.useCallback((type: ProductType) => {
-    if (type === "Matéria-Prima") return <Badge variant="secondary">Matéria-prima</Badge>;
-    return <Badge>Produto final</Badge>;
+  const getTypeBadge = React.useCallback((type: ProductType | string) => {
+    switch (type) {
+      case "Produto Final":
+        return <Badge className="bg-primary/90 text-primary-foreground">Produto Final</Badge>;
+      case "Matéria-Prima":
+        return <Badge variant="secondary">Matéria-Prima</Badge>;
+      case "Embalagem":
+        return <Badge className="bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/30">Embalagem</Badge>;
+      case "Rótulo / Etiqueta":
+        return <Badge className="bg-purple-500/15 text-purple-700 dark:text-purple-400 border border-purple-500/30">Rótulo / Etiqueta</Badge>;
+      case "Insumo de Produção":
+        return <Badge className="bg-sky-500/15 text-sky-700 dark:text-sky-400 border border-sky-500/30">Insumo Produtivo</Badge>;
+      case "Utensílio / Ferramenta":
+        return <Badge className="bg-orange-500/15 text-orange-700 dark:text-orange-400 border border-orange-500/30">Utensílio</Badge>;
+      case "Limpeza e Higiene":
+        return <Badge className="bg-teal-500/15 text-teal-700 dark:text-teal-400 border border-teal-500/30">Limpeza / Higiene</Badge>;
+      case "Material de Apoio":
+        return <Badge variant="outline">Material de Apoio</Badge>;
+      default:
+        return <Badge variant="outline">{type || "Outro"}</Badge>;
+    }
   }, []);
 
   const inactivateMutation = useMutation({

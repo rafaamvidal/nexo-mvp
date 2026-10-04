@@ -70,9 +70,9 @@ export function BomManagerDialog({
     queryFn: async () => {
       let q = supabase
         .from("products")
-        .select("id,name,unit,price_cost")
+        .select("id,name,unit,price_cost,type")
         .eq("status", "Ativo")
-        .eq("type", "Matéria-Prima")
+        .neq("type", "Produto Final")
         .order("name", { ascending: true });
 
       if (currentOrg?.id) q = q.eq("organization_id", currentOrg.id);
@@ -246,12 +246,12 @@ export function BomManagerDialog({
                             onValueChange={(v) => handleIngredientChange(idx, v)}
                           >
                             <SelectTrigger className="h-9 text-xs">
-                              <SelectValue placeholder="Selecione a matéria-prima..." />
+                              <SelectValue placeholder="Selecione o insumo / matéria-prima..." />
                             </SelectTrigger>
                             <SelectContent>
-                              {(rawMaterials ?? []).map((rm) => (
+                              {(rawMaterials ?? []).map((rm: any) => (
                                 <SelectItem key={rm.id} value={rm.id}>
-                                  {rm.name} ({formatBRL(Number(rm.price_cost ?? 0))}/{rm.unit})
+                                  {rm.name} {rm.type ? `[${rm.type}]` : ""} ({formatBRL(Number(rm.price_cost ?? 0))}/{rm.unit})
                                 </SelectItem>
                               ))}
                             </SelectContent>

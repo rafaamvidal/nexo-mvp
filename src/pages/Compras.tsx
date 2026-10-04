@@ -138,9 +138,9 @@ async function fetchSuppliers(orgId?: string): Promise<SupplierRow[]> {
 async function fetchRawMaterials(orgId?: string): Promise<ProductRawRow[]> {
   let query = supabase
     .from("products")
-    .select("id,name,price_cost,unit")
+    .select("id,name,price_cost,unit,type")
     .eq("status", "Ativo")
-    .eq("type", "Matéria-Prima")
+    .neq("type", "Produto Final")
     .order("name", { ascending: true });
   if (orgId) query = query.eq("organization_id", orgId);
   const { data, error } = await query;
