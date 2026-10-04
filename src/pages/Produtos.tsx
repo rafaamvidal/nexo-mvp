@@ -31,11 +31,13 @@ import {
 import { toast } from "sonner";
 import { Switch } from "@/components/ui/switch";
 import { isForeignKeyViolation, toastProductDeleteBlocked } from "@/lib/supabaseErrors";
+import { parsePackageMetadata, formatPackageSummary } from "@/lib/packageConversion";
 
 type Filter = "Todos" | ProductType;
 
 type Product = ProductRow & {
   category: string | null;
+  description: string | null;
   price_cost: number | null;
   price_sale: number | null;
   status: string | null;
@@ -50,7 +52,7 @@ import { useOrganization } from "@/contexts/OrganizationContext";
 async function fetchProducts(orgId?: string): Promise<Product[]> {
   let query = supabase
     .from("products")
-    .select("id,name,type,category,current_stock,min_stock,unit,price_cost,price_sale,created_at,status")
+    .select("id,name,type,category,description,current_stock,min_stock,unit,price_cost,price_sale,created_at,status")
     .order("name", { ascending: true });
 
   if (orgId) {
@@ -159,6 +161,7 @@ export default function Produtos() {
       current_stock: Number(p.current_stock ?? 0),
       min_stock: Number(p.min_stock ?? 0),
       category: p.category,
+      description: p.description,
       price_cost: p.price_cost,
       price_sale: p.price_sale,
     };
@@ -344,7 +347,7 @@ export default function Produtos() {
                       <TableHead>Categoria</TableHead>
                       <TableHead>Tipo</TableHead>
                       <TableHead className="text-right">Estoque atual</TableHead>
-                      <TableHead className="text-right">Custo</TableHead>
+                      <TableHead className="text-right">Custo unitário</TableHead>
                       <TableHead className="text-right">Preço</TableHead>
                       <TableHead className="text-right">Ações</TableHead>
                     </TableRow>
@@ -353,6 +356,7 @@ export default function Produtos() {
                     {products.map((p) => {
                       const low = Number(p.current_stock) < Number(p.min_stock);
                       const inactive = (p.status ?? "Ativo") === "Inativo";
+                      const pkg = parsePackageMetadata(p.description);
                       return (
                         <TableRow key={p.id} className="odd:bg-muted/20">
                           <TableCell className="font-semibold">
@@ -365,10 +369,30 @@ export default function Produtos() {
                           <TableCell className="text-muted-foreground">{p.category ?? "—"}</TableCell>
                           <TableCell>{getTypeBadge(p.type)}</TableCell>
                           <TableCell className={"text-right font-bold " + (low ? "text-destructive" : "")}>
-                            {p.current_stock}
-                            <span className="ml-2 text-xs font-normal text-muted-foreground">{p.unit}</span>
+                            <div>
+                              {p.current_stock}
+                              <span className="ml-1 text-xs font-normal text-muted-foreground">{p.unit}</span>
+                            </div>
+                            {Number(p.current_stock) > 0 && Number(p.price_cost ?? 0) > 0 && (
+                              <span className="text-[11px] font-normal text-muted-foreground block">
+                                Total: {formatBRL(Number(p.current_stock) * Number(p.price_cost))}
+                              </span>
+                            )}
                           </TableCell>
-                          <TableCell className="text-right">{formatBRL(Number(p.price_cost ?? 0))}</TableCell>
+                          <TableCell className="text-right">
+                            <div className="font-medium">
+                              {formatBRL(Number(p.price_cost ?? 0))}
+                              <span className="text-xs font-normal text-muted-foreground">/{p.unit}</span>
+                            </div>
+                            {pkg && (
+                              <span
+                                className="text-[11px] text-muted-foreground block truncate max-w-[140px] ml-auto"
+                                title={formatPackageSummary(pkg, p.unit)}
+                              >
+                                {pkg.packageName} {pkg.packageSize}{p.unit}
+                              </span>
+                            )}
+                          </TableCell>
                           <TableCell className="text-right">{formatBRL(Number(p.price_sale ?? 0))}</TableCell>
                           <TableCell className="text-right">
                             <div className="inline-flex items-center gap-2">

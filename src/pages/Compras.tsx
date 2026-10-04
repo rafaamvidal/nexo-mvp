@@ -28,9 +28,17 @@ import {
 } from "@/components/ui/alert-dialog";
 import { isForeignKeyViolation, toastDeleteBlocked } from "@/lib/supabaseErrors";
 import { useOrganization } from "@/contexts/OrganizationContext";
+import { parsePackageMetadata, calculateUnitCost } from "@/lib/packageConversion";
 
 type SupplierRow = { id: string; name: string; observations?: string | null };
-type ProductRawRow = { id: string; name: string; price_cost: number | null; unit: string };
+type ProductRawRow = {
+  id: string;
+  name: string;
+  price_cost: number | null;
+  unit: string;
+  type?: string;
+  description?: string | null;
+};
 
 type PurchaseOrderRow = {
   id: string;
@@ -138,7 +146,7 @@ async function fetchSuppliers(orgId?: string): Promise<SupplierRow[]> {
 async function fetchRawMaterials(orgId?: string): Promise<ProductRawRow[]> {
   let query = supabase
     .from("products")
-    .select("id,name,price_cost,unit,type")
+    .select("id,name,price_cost,unit,type,description")
     .eq("status", "Ativo")
     .neq("type", "Produto Final")
     .order("name", { ascending: true });
@@ -599,75 +607,107 @@ export default function Compras() {
                     <Label>Itens (somente Matéria-prima)</Label>
                     <div className="grid gap-2">
                       {items.map((it, idx) => {
-                        const unit = (raws ?? []).find((p) => p.id === it.product_id)?.unit;
+                        const prod = (raws ?? []).find((p) => p.id === it.product_id);
+                        const unit = prod?.unit;
+                        const pkg = parsePackageMetadata(prod?.description);
                         const qtyLabel = unit ? `Quantidade (${unit})` : "Quantidade";
                         return (
-                        <div key={idx} className="grid grid-cols-12 gap-2">
-                          <div className="col-span-6">
-                            <Select
-                              value={it.product_id}
-                              onValueChange={(v) =>
-                                setItems((cur) =>
-                                  cur.map((x, i) =>
-                                    i === idx
-                                      ? {
-                                          ...x,
-                                          product_id: v,
-                                          unit_cost:
-                                            Number((raws ?? []).find((p) => p.id === v)?.price_cost ?? x.unit_cost ?? 0) || 0,
-                                        }
-                                      : x,
-                                  ),
-                                )
-                              }
-                            >
-                              <SelectTrigger>
-                                <SelectValue placeholder="Produto…" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {(raws ?? []).map((p) => (
-                                  <SelectItem key={p.id} value={p.id}>
-                                    {p.name} <span className="text-muted-foreground">({p.unit})</span>
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
+                        <div key={idx} className="rounded-lg border border-border/40 p-2 space-y-1 bg-muted/10">
+                          <div className="grid grid-cols-12 gap-2">
+                            <div className="col-span-6">
+                              <Select
+                                value={it.product_id}
+                                onValueChange={(v) =>
+                                  setItems((cur) =>
+                                    cur.map((x, i) =>
+                                      i === idx
+                                        ? {
+                                            ...x,
+                                            product_id: v,
+                                            unit_cost:
+                                              Number((raws ?? []).find((p) => p.id === v)?.price_cost ?? x.unit_cost ?? 0) || 0,
+                                          }
+                                        : x,
+                                    ),
+                                  )
+                                }
+                              >
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Produto…" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {(raws ?? []).map((p) => (
+                                    <SelectItem key={p.id} value={p.id}>
+                                      {p.name} <span className="text-muted-foreground">({p.unit})</span>
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="col-span-2 grid gap-1">
+                              <p className="text-xs text-muted-foreground">{qtyLabel}</p>
+                              <Input
+                                type="number"
+                                min={1}
+                                value={it.quantity}
+                                onChange={(e) =>
+                                  setItems((cur) => cur.map((x, i) => (i === idx ? { ...x, quantity: Number(e.target.value) } : x)))
+                                }
+                              />
+                            </div>
+                            <div className="col-span-3 grid gap-1">
+                              <p className="text-xs text-muted-foreground">Custo unitário (R$)</p>
+                              <Input
+                                type="number"
+                                min={0}
+                                step={0.0001}
+                                value={it.unit_cost}
+                                onChange={(e) =>
+                                  setItems((cur) => cur.map((x, i) => (i === idx ? { ...x, unit_cost: Number(e.target.value) } : x)))
+                                }
+                              />
+                            </div>
+                            <div className="col-span-1 flex items-center justify-end">
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => setItems((cur) => cur.filter((_, i) => i !== idx))}
+                                disabled={items.length === 1}
+                                aria-label="Remover item"
+                              >
+                                ×
+                              </Button>
+                            </div>
                           </div>
-                          <div className="col-span-2 grid gap-1">
-                            <p className="text-xs text-muted-foreground">{qtyLabel}</p>
-                            <Input
-                              type="number"
-                              min={1}
-                              value={it.quantity}
-                              onChange={(e) =>
-                                setItems((cur) => cur.map((x, i) => (i === idx ? { ...x, quantity: Number(e.target.value) } : x)))
-                              }
-                            />
-                          </div>
-                          <div className="col-span-3 grid gap-1">
-                            <p className="text-xs text-muted-foreground">Custo unitário (R$)</p>
-                            <Input
-                              type="number"
-                              min={0}
-                              step={0.01}
-                              value={it.unit_cost}
-                              onChange={(e) =>
-                                setItems((cur) => cur.map((x, i) => (i === idx ? { ...x, unit_cost: Number(e.target.value) } : x)))
-                              }
-                            />
-                          </div>
-                          <div className="col-span-1 flex items-center justify-end">
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => setItems((cur) => cur.filter((_, i) => i !== idx))}
-                              disabled={items.length === 1}
-                              aria-label="Remover item"
-                            >
-                              ×
-                            </Button>
-                          </div>
+                          {pkg && (
+                            <div className="flex items-center justify-between text-[11px] text-muted-foreground pt-1 border-t border-border/30">
+                              <span>
+                                📦 Embalagem: <strong>{pkg.packageName} com {pkg.packageSize} {unit}</strong> ({formatBRL(pkg.packagePrice)})
+                              </span>
+                              <Button
+                                type="button"
+                                variant="link"
+                                size="sm"
+                                className="h-auto p-0 text-[11px] text-primary font-semibold"
+                                onClick={() => {
+                                  setItems((cur) =>
+                                    cur.map((x, i) =>
+                                      i === idx
+                                        ? {
+                                            ...x,
+                                            quantity: pkg.packageSize,
+                                            unit_cost: calculateUnitCost(pkg.packagePrice, pkg.packageSize),
+                                          }
+                                        : x
+                                    )
+                                  );
+                                }}
+                              >
+                                Preencher 1 {pkg.packageName} ({pkg.packageSize}{unit})
+                              </Button>
+                            </div>
+                          )}
                         </div>
                         );
                       })}
@@ -762,78 +802,110 @@ export default function Compras() {
                       {editStatus === "Cancelado" && <p className="text-xs text-muted-foreground">Cancelado: itens travados.</p>}
                       <div className="grid gap-2">
                         {editItems.map((it, idx) => {
-                          const unit = (raws ?? []).find((p) => p.id === it.product_id)?.unit;
+                          const prod = (raws ?? []).find((p) => p.id === it.product_id);
+                          const unit = prod?.unit;
+                          const pkg = parsePackageMetadata(prod?.description);
                           const qtyLabel = unit ? `Quantidade (${unit})` : "Quantidade";
                           return (
-                          <div key={idx} className="grid grid-cols-12 gap-2">
-                            <div className="col-span-6">
-                              <Select
-                                value={it.product_id}
-                                onValueChange={(v) =>
-                                  setEditItems((cur) =>
-                                    cur.map((x, i) =>
-                                      i === idx
-                                        ? {
-                                            ...x,
-                                            product_id: v,
-                                            unit_cost:
-                                              Number((raws ?? []).find((p) => p.id === v)?.price_cost ?? x.unit_cost ?? 0) || 0,
-                                          }
-                                        : x,
-                                    ),
-                                  )
-                                }
-                                disabled={editStatus === "Cancelado"}
-                              >
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Produto…" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {(raws ?? []).map((p) => (
-                                    <SelectItem key={p.id} value={p.id}>
-                                      {p.name} <span className="text-muted-foreground">({p.unit})</span>
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
+                          <div key={idx} className="rounded-lg border border-border/40 p-2 space-y-1 bg-muted/10">
+                            <div className="grid grid-cols-12 gap-2">
+                              <div className="col-span-6">
+                                <Select
+                                  value={it.product_id}
+                                  onValueChange={(v) =>
+                                    setEditItems((cur) =>
+                                      cur.map((x, i) =>
+                                        i === idx
+                                          ? {
+                                              ...x,
+                                              product_id: v,
+                                              unit_cost:
+                                                Number((raws ?? []).find((p) => p.id === v)?.price_cost ?? x.unit_cost ?? 0) || 0,
+                                            }
+                                          : x,
+                                      ),
+                                    )
+                                  }
+                                  disabled={editStatus === "Cancelado"}
+                                >
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Produto…" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {(raws ?? []).map((p) => (
+                                      <SelectItem key={p.id} value={p.id}>
+                                        {p.name} <span className="text-muted-foreground">({p.unit})</span>
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <div className="col-span-2 grid gap-1">
+                                <p className="text-xs text-muted-foreground">{qtyLabel}</p>
+                                <Input
+                                  type="number"
+                                  min={1}
+                                  value={it.quantity}
+                                  onChange={(e) =>
+                                    setEditItems((cur) => cur.map((x, i) => (i === idx ? { ...x, quantity: Number(e.target.value) } : x)))
+                                  }
+                                  disabled={editStatus === "Cancelado"}
+                                />
+                              </div>
+                              <div className="col-span-3 grid gap-1">
+                                <p className="text-xs text-muted-foreground">Custo unitário (R$)</p>
+                                <Input
+                                  type="number"
+                                  min={0}
+                                  step={0.0001}
+                                  value={it.unit_cost}
+                                  onChange={(e) =>
+                                    setEditItems((cur) => cur.map((x, i) => (i === idx ? { ...x, unit_cost: Number(e.target.value) } : x)))
+                                  }
+                                  disabled={editStatus === "Cancelado"}
+                                />
+                              </div>
+                              <div className="col-span-1 flex items-center justify-end">
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => setEditItems((cur) => cur.filter((_, i) => i !== idx))}
+                                  disabled={editItems.length === 1 || editStatus === "Cancelado"}
+                                  aria-label="Remover item"
+                                >
+                                  ×
+                                </Button>
+                              </div>
                             </div>
-                            <div className="col-span-2 grid gap-1">
-                              <p className="text-xs text-muted-foreground">{qtyLabel}</p>
-                              <Input
-                                type="number"
-                                min={1}
-                                value={it.quantity}
-                                onChange={(e) =>
-                                  setEditItems((cur) => cur.map((x, i) => (i === idx ? { ...x, quantity: Number(e.target.value) } : x)))
-                                }
-                                disabled={editStatus === "Cancelado"}
-                              />
-                            </div>
-                            <div className="col-span-3 grid gap-1">
-                              <p className="text-xs text-muted-foreground">Custo unitário (R$)</p>
-                              <Input
-                                type="number"
-                                min={0}
-                                step={0.01}
-                                value={it.unit_cost}
-                                onChange={(e) =>
-                                  setEditItems((cur) => cur.map((x, i) => (i === idx ? { ...x, unit_cost: Number(e.target.value) } : x)))
-                                }
-                                disabled={editStatus === "Cancelado"}
-                              />
-                            </div>
-                            <div className="col-span-1 flex items-center justify-end">
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => setEditItems((cur) => cur.filter((_, i) => i !== idx))}
-                                disabled={editItems.length === 1 || editStatus === "Cancelado"}
-                                aria-label="Remover item"
-                              >
-                                ×
-                              </Button>
-                            </div>
+                            {pkg && editStatus !== "Cancelado" && (
+                              <div className="flex items-center justify-between text-[11px] text-muted-foreground pt-1 border-t border-border/30">
+                                <span>
+                                  📦 Embalagem: <strong>{pkg.packageName} com {pkg.packageSize} {unit}</strong> ({formatBRL(pkg.packagePrice)})
+                                </span>
+                                <Button
+                                  type="button"
+                                  variant="link"
+                                  size="sm"
+                                  className="h-auto p-0 text-[11px] text-primary font-semibold"
+                                  onClick={() => {
+                                    setEditItems((cur) =>
+                                      cur.map((x, i) =>
+                                        i === idx
+                                          ? {
+                                              ...x,
+                                              quantity: pkg.packageSize,
+                                              unit_cost: calculateUnitCost(pkg.packagePrice, pkg.packageSize),
+                                            }
+                                          : x
+                                      )
+                                    );
+                                  }}
+                                >
+                                  Preencher 1 {pkg.packageName} ({pkg.packageSize}{unit})
+                                </Button>
+                              </div>
+                            )}
                           </div>
                           );
                         })}

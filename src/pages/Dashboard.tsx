@@ -18,6 +18,7 @@ type Filter = "Todos" | ProductType;
 
 type Product = ProductRow & {
   category: string | null;
+  description: string | null;
   price_cost: number | null;
   price_sale: number | null;
 };
@@ -29,7 +30,7 @@ function formatBRL(value: number) {
 async function fetchProducts(): Promise<Product[]> {
   const { data, error } = await supabase
     .from("products")
-    .select("id,name,type,category,current_stock,min_stock,unit,price_cost,price_sale,created_at")
+    .select("id,name,type,category,description,current_stock,min_stock,unit,price_cost,price_sale,created_at")
     .order("name", { ascending: true });
   if (error) throw error;
   return (data ?? []) as Product[];
@@ -112,6 +113,7 @@ export default function Dashboard() {
       current_stock: Number(p.current_stock ?? 0),
       min_stock: Number(p.min_stock ?? 0),
       category: p.category,
+      description: p.description,
       price_cost: p.price_cost,
       price_sale: p.price_sale,
     };

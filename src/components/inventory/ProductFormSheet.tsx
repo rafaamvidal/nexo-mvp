@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Box, Layers, Package, Tag, Wrench } from "lucide-react";
+import { AlertTriangle, Box, Calculator, Layers, Package, Tag, Wrench } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,6 +29,15 @@ import {
   encodeProductClassificationFallback,
   isProductsTypeCheckError,
 } from "@/lib/productClassification";
+import {
+  COMMON_PACKAGE_TYPES,
+  calculateUnitCost,
+  calculateStockTotal,
+  parsePackageMetadata,
+  encodePackageMetadata,
+  hasSuspectedUnitCostAnomaly,
+  type PackageInfo,
+} from "@/lib/packageConversion";
 
 function normalizeName(name: string) {
   return String(name ?? "")
@@ -169,6 +178,7 @@ export type EditableProduct = {
   category?: string | null;
   price_cost?: number | null;
   price_sale?: number | null;
+  description?: string | null;
 };
 
 export function ProductFormSheet({
@@ -182,6 +192,10 @@ export function ProductFormSheet({
   const [reactivateDialogOpen, setReactivateDialogOpen] = React.useState(false);
   const [reactivateCandidate, setReactivateCandidate] = React.useState<{ id: string; name: string } | null>(null);
   const [pendingValues, setPendingValues] = React.useState<FormValues | null>(null);
+  const [showPackagingCalc, setShowPackagingCalc] = React.useState(false);
+  const [pkgName, setPkgName] = React.useState<string>("Saco");
+  const [pkgSize, setPkgSize] = React.useState<string>("");
+  const [pkgPrice, setPkgPrice] = React.useState<string>("");
   const qc = useQueryClient();
   const { currentOrg } = useOrganization();
 
@@ -202,12 +216,71 @@ export function ProductFormSheet({
   const unitValue = form.watch("unit");
   const isUnitPreset = React.useMemo(() => UNIT_OPTIONS.includes(unitValue as any), [unitValue]);
 
+  const currentUnit = form.watch("unit") || "un";
+  const currentType = form.watch("type");
+  const currentCostValue = form.watch("price_cost");
+  const currentStockValue = form.watch("current_stock");
+
+  const numCurrentCost = React.useMemo(() => parseBRDecimal(currentCostValue), [currentCostValue]);
+  const numCurrentStock = React.useMemo(() => parseBRDecimal(currentStockValue) ?? 0, [currentStockValue]);
+
+  const numPkgSize = React.useMemo(() => parseBRDecimal(pkgSize) ?? 0, [pkgSize]);
+  const numPkgPrice = React.useMemo(() => parseBRDecimal(pkgPrice) ?? 0, [pkgPrice]);
+
+  const calcUnitCost = React.useMemo(() => {
+    return calculateUnitCost(numPkgPrice, numPkgSize);
+  }, [numPkgPrice, numPkgSize]);
+
+  const calcStockTotal = React.useMemo(() => {
+    const costToUse = showPackagingCalc && calcUnitCost > 0 ? calcUnitCost : (numCurrentCost ?? 0);
+    return calculateStockTotal(numCurrentStock, costToUse);
+  }, [showPackagingCalc, calcUnitCost, numCurrentCost, numCurrentStock]);
+
+  const isSuspiciousCost = React.useMemo(() => {
+    return hasSuspectedUnitCostAnomaly(numCurrentCost, currentUnit, currentType);
+  }, [numCurrentCost, currentUnit, currentType]);
+
+  const handlePkgPriceChange = (val: string) => {
+    setPkgPrice(val);
+    const size = parseBRDecimal(pkgSize) ?? 0;
+    const price = parseBRDecimal(val) ?? 0;
+    if (size > 0 && price > 0) {
+      const unit = calculateUnitCost(price, size);
+      form.setValue("price_cost", unit, { shouldDirty: true, shouldValidate: true });
+    }
+  };
+
+  const handlePkgSizeChange = (val: string) => {
+    setPkgSize(val);
+    const size = parseBRDecimal(val) ?? 0;
+    const price = parseBRDecimal(pkgPrice) ?? 0;
+    if (size > 0 && price > 0) {
+      const unit = calculateUnitCost(price, size);
+      form.setValue("price_cost", unit, { shouldDirty: true, shouldValidate: true });
+    }
+  };
+
+  const handleAutoConvertAnomaly = () => {
+    setShowPackagingCalc(true);
+    setPkgName("Saco");
+    setPkgSize("25");
+    if (numCurrentCost && numCurrentCost > 0) {
+      setPkgPrice(numCurrentCost.toLocaleString("pt-BR", { minimumFractionDigits: 2 }));
+      const newUnitCost = calculateUnitCost(numCurrentCost, 25);
+      form.setValue("price_cost", newUnitCost, { shouldDirty: true, shouldValidate: true });
+    }
+  };
+
   React.useEffect(() => {
     if (!open) return;
     setReactivateDialogOpen(false);
     setReactivateCandidate(null);
     setPendingValues(null);
     if (!product) {
+      setShowPackagingCalc(false);
+      setPkgName("Saco");
+      setPkgSize("");
+      setPkgPrice("");
       form.reset({
         name: "",
         type: "Produto Final",
@@ -226,6 +299,19 @@ export function ProductFormSheet({
       category: product.category,
     });
 
+    const parsedPkg = parsePackageMetadata(product.description);
+    if (parsedPkg) {
+      setShowPackagingCalc(true);
+      setPkgName(parsedPkg.packageName);
+      setPkgSize(String(parsedPkg.packageSize));
+      setPkgPrice(parsedPkg.packagePrice.toLocaleString("pt-BR", { minimumFractionDigits: 2 }));
+    } else {
+      setShowPackagingCalc(false);
+      setPkgName("Saco");
+      setPkgSize("");
+      setPkgPrice("");
+    }
+
     form.reset({
       name: product.name,
       type: resolved.type,
@@ -240,11 +326,18 @@ export function ProductFormSheet({
 
   const reactivateMutation = useMutation({
     mutationFn: async ({ id, values }: { id: string; values: FormValues }) => {
+      const pkgInfo: PackageInfo | null =
+        showPackagingCalc && numPkgSize > 0 && numPkgPrice > 0
+          ? { packageName: pkgName || "Saco", packageSize: numPkgSize, packagePrice: numPkgPrice }
+          : null;
+      const finalDescription = encodePackageMetadata(pkgInfo, product?.description);
+
       const payload: any = {
         status: "Ativo",
         name: normalizeName(values.name),
         type: values.type,
         category: (values.category ?? "").trim() || null,
+        description: finalDescription,
         unit: values.unit,
         current_stock: values.current_stock,
         min_stock: values.min_stock,
@@ -295,10 +388,17 @@ export function ProductFormSheet({
         }
       }
 
+      const pkgInfo: PackageInfo | null =
+        showPackagingCalc && numPkgSize > 0 && numPkgPrice > 0
+          ? { packageName: pkgName || "Saco", packageSize: numPkgSize, packagePrice: numPkgPrice }
+          : null;
+      const finalDescription = encodePackageMetadata(pkgInfo, product?.description);
+
       const payload: any = {
         name: normalizeName(values.name),
         type: values.type,
         category: (values.category ?? "").trim() || null,
+        description: finalDescription,
         unit: values.unit,
         current_stock: values.current_stock ?? 0,
         min_stock: values.min_stock ?? 0,
@@ -559,44 +659,230 @@ export function ProductFormSheet({
             </div>
           </div>
 
-          {/* CUSTO & PREÇO DE VENDA */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="grid gap-1.5">
-              <Label htmlFor="price_cost" className="font-semibold text-foreground">
-                Preço de Custo (R$)
-              </Label>
-              <Input
-                id="price_cost"
-                inputMode="decimal"
-                placeholder="0,00"
-                {...form.register("price_cost")}
-              />
-              {form.formState.errors.price_cost && (
-                <p className="text-xs font-medium text-destructive">{form.formState.errors.price_cost.message}</p>
-              )}
+          {/* ALERTA DE ANOMALIA: CUSTO MUITO ALTO PARA A UNIDADE (EX: SACO DE 25KG INFORMADO COMO KG) */}
+          {isSuspiciousCost && !showPackagingCalc && (
+            <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-900 dark:text-amber-200">
+              <div className="flex items-start gap-2.5">
+                <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 mt-0.5" />
+                <div className="space-y-1.5 flex-1">
+                  <p className="font-semibold text-foreground">
+                    Atenção no Custo por {currentUnit}:
+                  </p>
+                  <p>
+                    O custo informado está em{" "}
+                    <strong>
+                      {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(
+                        numCurrentCost ?? 0
+                      )}{" "}
+                      por 1 {currentUnit}
+                    </strong>
+                    .
+                    {numCurrentStock > 0 && (
+                      <span>
+                        {" "}
+                        O estoque atual de {numCurrentStock} {currentUnit} está calculado em{" "}
+                        <strong>
+                          {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(
+                            (numCurrentCost ?? 0) * numCurrentStock
+                          )}
+                        </strong>
+                        .
+                      </span>
+                    )}
+                  </p>
+                  <p className="text-muted-foreground">
+                    Se esse valor de {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(numCurrentCost ?? 0)} foi o preço total de um <strong>saco, balde ou caixa fechada</strong>, use a conversão para calcular o custo real por {currentUnit}:
+                  </p>
+                  <div className="pt-1 flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-xs bg-background/90 hover:bg-background border-amber-500/50 font-semibold"
+                      onClick={handleAutoConvertAnomaly}
+                    >
+                      📦 Converter Saco de 25 kg ({new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(calculateUnitCost(numCurrentCost ?? 0, 25))}/{currentUnit})
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 text-xs"
+                      onClick={() => setShowPackagingCalc(true)}
+                    >
+                      Outro tamanho de embalagem…
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* CARD DE CUSTOS & EMBALAGEM DE COMPRA */}
+          <div className="rounded-lg border border-border/80 bg-muted/20 p-3.5 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <Package className="h-4 w-4 text-primary" />
+                <span className="text-xs font-semibold uppercase tracking-wider text-foreground">
+                  Custo & Embalagem de Compra
+                </span>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs gap-1 border-primary/30 text-primary hover:bg-primary/10"
+                onClick={() => setShowPackagingCalc(!showPackagingCalc)}
+              >
+                <Calculator className="h-3.5 w-3.5" />
+                {showPackagingCalc ? "Informar Custo Direto" : "📦 Calcular por Embalagem Fechada"}
+              </Button>
             </div>
 
-            <div className="grid gap-1.5">
-              <Label htmlFor="price_sale" className="font-semibold text-foreground">
-                Preço de Venda (R$)
-              </Label>
-              <Input
-                id="price_sale"
-                inputMode="decimal"
-                placeholder="0,00"
-                {...form.register("price_sale")}
-              />
-              {form.formState.errors.price_sale && (
-                <p className="text-xs font-medium text-destructive">{form.formState.errors.price_sale.message}</p>
-              )}
+            {/* CALCULADORA DE EMBALAGEM FECHADA */}
+            {showPackagingCalc && (
+              <div className="rounded-md border border-primary/20 bg-background/80 p-3 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-foreground">
+                    Dados da Embalagem do Fornecedor (Saco, Caixa, Balde)
+                  </span>
+                  <span className="text-[11px] text-muted-foreground">
+                    Calcula custo por {currentUnit} automaticamente
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-12 gap-2">
+                  <div className="col-span-5 grid gap-1">
+                    <Label className="text-xs">Tipo de Embalagem</Label>
+                    <Select value={pkgName} onValueChange={setPkgName}>
+                      <SelectTrigger className="h-8 text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {COMMON_PACKAGE_TYPES.map((t) => (
+                          <SelectItem key={t} value={t} className="text-xs">
+                            {t}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="col-span-3 grid gap-1">
+                    <Label className="text-xs">Conteúdo ({currentUnit})</Label>
+                    <Input
+                      value={pkgSize}
+                      onChange={(e) => handlePkgSizeChange(e.target.value)}
+                      placeholder="Ex: 25"
+                      className="h-8 text-xs font-medium"
+                      inputMode="decimal"
+                    />
+                  </div>
+
+                  <div className="col-span-4 grid gap-1">
+                    <Label className="text-xs">Preço Pago (R$)</Label>
+                    <Input
+                      value={pkgPrice}
+                      onChange={(e) => handlePkgPriceChange(e.target.value)}
+                      placeholder="Ex: 512,64"
+                      className="h-8 text-xs font-medium"
+                      inputMode="decimal"
+                    />
+                  </div>
+                </div>
+
+                {calcUnitCost > 0 && (
+                  <div className="rounded-md bg-primary/10 border border-primary/20 p-2.5 text-xs space-y-1">
+                    <div className="flex justify-between items-center">
+                      <span className="text-muted-foreground font-medium">Custo Unitário Calculado:</span>
+                      <span className="font-extrabold text-primary text-sm">
+                        {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(
+                          calcUnitCost
+                        )}{" "}
+                        / {currentUnit}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center text-[11px] text-muted-foreground">
+                      <span>Memória de cálculo:</span>
+                      <span>
+                        {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(
+                          numPkgPrice
+                        )}{" "}
+                        ÷ {numPkgSize} {currentUnit}
+                      </span>
+                    </div>
+                    {numCurrentStock > 0 && (
+                      <div className="flex justify-between items-center pt-1 border-t border-primary/20 font-semibold text-foreground">
+                        <span>Valor do Estoque Atual ({numCurrentStock} {currentUnit}):</span>
+                        <span className="text-emerald-600 dark:text-emerald-400">
+                          {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(
+                            calcStockTotal
+                          )}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* CAMPOS DE CUSTO E PREÇO DE VENDA */}
+            <div className="grid grid-cols-2 gap-3 pt-1">
+              <div className="grid gap-1.5">
+                <Label htmlFor="price_cost" className="font-semibold text-foreground text-xs">
+                  Preço de Custo (por {currentUnit}) *
+                </Label>
+                <Input
+                  id="price_cost"
+                  inputMode="decimal"
+                  placeholder="0,00"
+                  {...form.register("price_cost")}
+                />
+                {form.formState.errors.price_cost && (
+                  <p className="text-xs font-medium text-destructive">{form.formState.errors.price_cost.message}</p>
+                )}
+                <p className="text-[11px] text-muted-foreground">
+                  Custo de 1 {currentUnit} individual (usado na valorização do estoque e fichas técnicas).
+                </p>
+              </div>
+
+              <div className="grid gap-1.5">
+                <Label htmlFor="price_sale" className="font-semibold text-foreground text-xs">
+                  Preço de Venda (R$)
+                </Label>
+                <Input
+                  id="price_sale"
+                  inputMode="decimal"
+                  placeholder="0,00"
+                  {...form.register("price_sale")}
+                />
+                {form.formState.errors.price_sale && (
+                  <p className="text-xs font-medium text-destructive">{form.formState.errors.price_sale.message}</p>
+                )}
+                <p className="text-[11px] text-muted-foreground">
+                  Preço cobrado aos clientes (obrigatório para produtos finais).
+                </p>
+              </div>
             </div>
           </div>
 
           {/* ESTOQUE ATUAL */}
           <div className="grid gap-1.5">
-            <Label htmlFor="current_stock" className="font-semibold text-foreground">
-              Estoque Inicial / Atual
-            </Label>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="current_stock" className="font-semibold text-foreground">
+                Estoque Inicial / Atual ({currentUnit})
+              </Label>
+              {numCurrentStock > 0 && ((numCurrentCost ?? 0) > 0 || calcUnitCost > 0) && (
+                <span className="text-xs text-muted-foreground font-medium">
+                  Valor em estoque:{" "}
+                  <strong className="text-foreground">
+                    {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(
+                      calcStockTotal
+                    )}
+                  </strong>
+                </span>
+              )}
+            </div>
             <Input
               id="current_stock"
               inputMode="decimal"
