@@ -29,7 +29,7 @@ import {
 import { isForeignKeyViolation, toastDeleteBlocked } from "@/lib/supabaseErrors";
 import { useOrganization } from "@/contexts/OrganizationContext";
 
-type SupplierRow = { id: string; name: string };
+type SupplierRow = { id: string; name: string; observations?: string | null };
 type ProductRawRow = { id: string; name: string; price_cost: number | null; unit: string };
 
 type PurchaseOrderRow = {
@@ -128,7 +128,7 @@ async function upsertPagarForPO(params: {
 }
 
 async function fetchSuppliers(orgId?: string): Promise<SupplierRow[]> {
-  let query = supabase.from("suppliers").select("id,name").order("name", { ascending: true });
+  let query = supabase.from("suppliers").select("id,name,observations").order("name", { ascending: true });
   if (orgId) query = query.eq("organization_id", orgId);
   const { data, error } = await query;
   if (error) throw error;
@@ -566,11 +566,15 @@ export default function Compras() {
                           <SelectValue placeholder="Selecione…" />
                         </SelectTrigger>
                         <SelectContent>
-                          {(suppliers ?? []).map((s) => (
-                            <SelectItem key={s.id} value={s.id}>
-                              {s.name}
-                            </SelectItem>
-                          ))}
+                          {(suppliers ?? []).map((s) => {
+                            const fornecMatch = s.observations?.match(/\[Fornece:\s*([^\]]+)\]/i);
+                            const fornece = fornecMatch ? fornecMatch[1].trim() : null;
+                            return (
+                              <SelectItem key={s.id} value={s.id}>
+                                {s.name} {fornece ? `— (${fornece})` : ""}
+                              </SelectItem>
+                            );
+                          })}
                         </SelectContent>
                       </Select>
                     </div>
@@ -703,11 +707,15 @@ export default function Compras() {
                             <SelectValue placeholder="Selecione…" />
                           </SelectTrigger>
                           <SelectContent>
-                            {(suppliers ?? []).map((s) => (
-                              <SelectItem key={s.id} value={s.id}>
-                                {s.name}
-                              </SelectItem>
-                            ))}
+                            {(suppliers ?? []).map((s) => {
+                              const fornecMatch = s.observations?.match(/\[Fornece:\s*([^\]]+)\]/i);
+                              const fornece = fornecMatch ? fornecMatch[1].trim() : null;
+                              return (
+                                <SelectItem key={s.id} value={s.id}>
+                                  {s.name} {fornece ? `— (${fornece})` : ""}
+                                </SelectItem>
+                              );
+                            })}
                           </SelectContent>
                         </Select>
                       </div>

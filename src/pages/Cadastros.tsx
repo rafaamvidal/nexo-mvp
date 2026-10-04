@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, Mail, MapPin, MessageCircle, Pencil, Phone, Plus, Search, Trash2, User, Users } from "lucide-react";
+import { Loader2, Mail, MapPin, MessageCircle, Package, Pencil, Phone, Plus, Search, Trash2, User, Users } from "lucide-react";
 
 import { AppShell } from "@/components/layout/AppShell";
 import { Button } from "@/components/ui/button";
@@ -106,6 +106,7 @@ function EntityDialog({
   const [state, setState] = React.useState(initial?.state ?? "");
   const [limitCredit, setLimitCredit] = React.useState<number | "">(initial?.limit_credit ?? "");
   const [contactName, setContactName] = React.useState("");
+  const [suppliedItems, setSuppliedItems] = React.useState("");
   const [observations, setObservations] = React.useState(initial?.observations ?? "");
 
   React.useEffect(() => {
@@ -120,15 +121,25 @@ function EntityDialog({
     setState(initial?.state ?? "");
     setLimitCredit(initial?.limit_credit ?? "");
 
-    const obs = initial?.observations ?? "";
-    const match = obs.match(/^\[Vendedor:\s*([^\]]+)\]\s*(.*)$/);
-    if (match) {
-      setContactName(match[1]);
-      setObservations(match[2]);
-    } else {
-      setContactName("");
-      setObservations(obs);
+    let rawObs = initial?.observations ?? "";
+    let extractedContact = "";
+    let extractedSupplied = "";
+
+    const fornecMatch = rawObs.match(/\[Fornece:\s*([^\]]+)\]/i);
+    if (fornecMatch) {
+      extractedSupplied = fornecMatch[1].trim();
+      rawObs = rawObs.replace(fornecMatch[0], "").trim();
     }
+
+    const vendMatch = rawObs.match(/\[Vendedor:\s*([^\]]+)\]/i);
+    if (vendMatch) {
+      extractedContact = vendMatch[1].trim();
+      rawObs = rawObs.replace(vendMatch[0], "").trim();
+    }
+
+    setContactName(extractedContact);
+    setSuppliedItems(extractedSupplied);
+    setObservations(rawObs);
   }, [open, initial]);
 
   const handleCepLookup = async (cepInput: string) => {
@@ -271,14 +282,31 @@ function EntityDialog({
           )}
 
           {!isClient && (
-            <div className="grid gap-2 border-t pt-3">
-              <Label>Vendedor / Representante Comercial (Contato)</Label>
-              <Input
-                value={contactName}
-                onChange={(e) => setContactName(e.target.value)}
-                placeholder="Ex: Thiago, Ney, Nicole Silva..."
-              />
-            </div>
+            <>
+              <div className="grid gap-2 border-t pt-3">
+                <Label className="flex items-center gap-1.5 font-semibold text-foreground">
+                  <Package className="h-4 w-4 text-primary" />
+                  <span>O que este fornecedor fornece? (Produtos / Insumos / Categorias)</span>
+                </Label>
+                <Input
+                  value={suppliedItems}
+                  onChange={(e) => setSuppliedItems(e.target.value)}
+                  placeholder="Ex: Embalagens plásticas, Cacau em pó, Rótulos, Chocolates..."
+                />
+                <p className="text-xs text-muted-foreground">
+                  Descreva as matérias-primas, insumos ou serviços fornecidos para facilitar a busca e cotação no dia a dia.
+                </p>
+              </div>
+
+              <div className="grid gap-2">
+                <Label>Vendedor / Representante Comercial (Contato)</Label>
+                <Input
+                  value={contactName}
+                  onChange={(e) => setContactName(e.target.value)}
+                  placeholder="Ex: Thiago, Ney, Nicole Silva..."
+                />
+              </div>
+            </>
           )}
 
           <div className="grid gap-2">
@@ -286,7 +314,7 @@ function EntityDialog({
             <Input
               value={observations}
               onChange={(e) => setObservations(e.target.value)}
-              placeholder="Informações adicionais, horários, condições..."
+              placeholder="Informações adicionais, horários, condições de frete..."
             />
           </div>
 
@@ -297,10 +325,17 @@ function EntityDialog({
             onClick={async () => {
               try {
                 if (!name.trim()) throw new Error("Informe o nome");
-                const finalObs =
-                  !isClient && contactName.trim()
-                    ? `[Vendedor: ${contactName.trim()}] ${observations.trim()}`.trim()
-                    : observations.trim() || null;
+                let finalObs = observations.trim();
+                const tags: string[] = [];
+                if (!isClient && suppliedItems.trim()) {
+                  tags.push(`[Fornece: ${suppliedItems.trim()}]`);
+                }
+                if (!isClient && contactName.trim()) {
+                  tags.push(`[Vendedor: ${contactName.trim()}]`);
+                }
+                if (tags.length > 0) {
+                  finalObs = `${tags.join(" ")} ${finalObs}`.trim();
+                }
 
                 const payloadToSave: EntityPayload = {
                   name: name.trim(),
@@ -310,7 +345,7 @@ function EntityDialog({
                   address: address.trim() || null,
                   city: city.trim() || null,
                   state: state.trim() || null,
-                  observations: finalObs,
+                  observations: finalObs || null,
                 };
 
                 if (isClient) {
@@ -376,7 +411,8 @@ export default function Cadastros() {
         (s.name ?? "").toLowerCase().includes(term) ||
         (s.tax_id ?? "").includes(term) ||
         (s.city ?? "").toLowerCase().includes(term) ||
-        (s.phone ?? "").includes(term)
+        (s.phone ?? "").includes(term) ||
+        (s.observations ?? "").toLowerCase().includes(term)
     );
   }, [suppliers, q]);
 
@@ -486,7 +522,7 @@ export default function Cadastros() {
               <Input
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
-                placeholder="Buscar por nome, documento, cidade…"
+                placeholder="Buscar por nome, documento, produto fornecido, cidade…"
                 className="pl-9"
               />
             </div>
@@ -705,8 +741,12 @@ export default function Cadastros() {
                             </TableRow>
                           ) : (
                             filteredSuppliers.map((s) => {
-                              const matchVendedor = s.observations?.match(/\[Vendedor:\s*([^\]]+)\]/);
-                              const vendedor = matchVendedor ? matchVendedor[1] : null;
+                              const matchFornece = s.observations?.match(/\[Fornece:\s*([^\]]+)\]/i);
+                              const fornece = matchFornece ? matchFornece[1].trim() : null;
+
+                              const matchVendedor = s.observations?.match(/\[Vendedor:\s*([^\]]+)\]/i);
+                              const vendedor = matchVendedor ? matchVendedor[1].trim() : null;
+
                               const waGreeting = vendedor
                                 ? `Olá ${vendedor}, tudo bem? Contato da fábrica via AGILIX referente a ${s.name}.`
                                 : `Olá ${s.name}, tudo bem? Contato da fábrica via AGILIX.`;
@@ -714,13 +754,24 @@ export default function Cadastros() {
                               return (
                                 <TableRow key={s.id} className="odd:bg-muted/20">
                                   <TableCell>
-                                    <div className="font-semibold">{s.name}</div>
-                                    {vendedor && (
-                                      <div className="mt-0.5 inline-flex items-center gap-1 text-xs font-medium text-primary">
-                                        <User className="h-3 w-3" />
-                                        <span>Vendedor: {vendedor}</span>
-                                      </div>
-                                    )}
+                                    <div className="font-semibold text-foreground">{s.name}</div>
+                                    <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                                      {fornece && (
+                                        <span
+                                          className="inline-flex items-center gap-1 rounded-md bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-400 border border-amber-500/20"
+                                          title={`Fornece: ${fornece}`}
+                                        >
+                                          <Package className="h-3 w-3 shrink-0" />
+                                          <span>{fornece}</span>
+                                        </span>
+                                      )}
+                                      {vendedor && (
+                                        <span className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                                          <User className="h-3 w-3 shrink-0" />
+                                          <span>Vendedor: {vendedor}</span>
+                                        </span>
+                                      )}
+                                    </div>
                                   </TableCell>
                                   <TableCell className="text-muted-foreground">
                                     {s.tax_id ? maskCpfCnpj(s.tax_id) : "—"}

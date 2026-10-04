@@ -39,7 +39,7 @@ const SPREADSHEET_SUPPLIERS = [
     email: "newprintetiquetas@hotmail.com",
     address: "R. Antonio Bertolini, 305 - Jardim São Francisco - Sumaré - SP",
     contact_name: "Ney",
-    observations: "[Vendedor: Ney] Fornecedor de Etiquetas personalizadas Don Juan",
+    observations: "[Fornece: Etiquetas personalizadas Don Juan] [Vendedor: Ney]",
   },
   {
     name: "DU PORTO INDUSTRIA ALIMENTICIA LTDA",
@@ -48,7 +48,7 @@ const SPREADSHEET_SUPPLIERS = [
     email: "",
     address: "Av. dos Trabalhadores, 800 - Canguera - Porto Feliz - SP",
     contact_name: "Thiago",
-    observations: "[Vendedor: Thiago] Fornecedor de Ácido Cítrico e Amido de Milho",
+    observations: "[Fornece: Ácido Cítrico e Amido de Milho] [Vendedor: Thiago]",
   },
   {
     name: "MJC EMBALAGENS LTDA",
@@ -57,7 +57,7 @@ const SPREADSHEET_SUPPLIERS = [
     email: "",
     address: "",
     contact_name: "",
-    observations: "Fornecedor de Caixas de Papelão para transporte e embalagem",
+    observations: "[Fornece: Caixas de Papelão e Embalagens de Transporte]",
   },
   {
     name: "VOGLER",
@@ -66,7 +66,7 @@ const SPREADSHEET_SUPPLIERS = [
     email: "nicole.nascimento@vogler.com.br",
     address: "Est. Particular Fukutaro Yida, 1155/1173 - Bairro Cooperativa - São Bernardo do Campo - SP",
     contact_name: "Nicole Silva do Nascimento",
-    observations: "[Vendedor: Nicole Silva do Nascimento] Tel 2: 11 2626-4424 - Ácido Cítrico, Sorbato de Potássio e Álcool",
+    observations: "[Fornece: Ácido Cítrico, Sorbato de Potássio e Álcool] [Vendedor: Nicole Silva do Nascimento] Tel 2: 11 2626-4424",
   },
   {
     name: "D.A BRASIL DISTRIBUIÇÃO DE ALCOOL CINTIA",
@@ -75,7 +75,7 @@ const SPREADSHEET_SUPPLIERS = [
     email: "",
     address: "",
     contact_name: "Cintia",
-    observations: "[Vendedor: Cintia] Fornecedor de Álcool de Cereal",
+    observations: "[Fornece: Álcool de Cereal] [Vendedor: Cintia]",
   },
   {
     name: "WELINGTON PIZZI",
@@ -84,7 +84,7 @@ const SPREADSHEET_SUPPLIERS = [
     email: "",
     address: "",
     contact_name: "Welington Pizzi",
-    observations: "[Vendedor: Welington Pizzi] Embalagens especiais",
+    observations: "[Fornece: Embalagens especiais] [Vendedor: Welington Pizzi]",
   },
   {
     name: "REDE AMERIPAN FESTAS LTDA",
@@ -93,7 +93,7 @@ const SPREADSHEET_SUPPLIERS = [
     email: "",
     address: "Av. Governador Pedro de Toledo, 2720 - Bonfim - Campinas - SP",
     contact_name: "",
-    observations: "Fornecedor de Creme Culinário Bravo e insumos de confeitaria",
+    observations: "[Fornece: Creme Culinário Bravo e Insumos de Confeitaria]",
   },
   {
     name: "NEVADO",
@@ -102,7 +102,7 @@ const SPREADSHEET_SUPPLIERS = [
     email: "",
     address: "",
     contact_name: "",
-    observations: "Fornecedor oficial de Chocolates, Coberturas e Recheios Trufados",
+    observations: "[Fornece: Chocolates, Coberturas e Recheios Trufados]",
   },
   {
     name: "GLOBAL EMBALAGENS",
@@ -111,7 +111,7 @@ const SPREADSHEET_SUPPLIERS = [
     email: "",
     address: "Av. Dr. Antonio Pires de Almeida, 880, Centro - Porto Feliz - SP",
     contact_name: "",
-    observations: "Utensílios gerais de fábrica e embalagens",
+    observations: "[Fornece: Utensílios gerais de fábrica e Embalagens]",
   },
 ];
 
