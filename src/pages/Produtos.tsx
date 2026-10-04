@@ -16,7 +16,6 @@ import { SpreadsheetDataImporter } from "@/components/organization/SpreadsheetDa
 import { StockQuickAdjust } from "@/components/inventory/StockQuickAdjust";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -339,10 +338,9 @@ export default function Produtos() {
 
           {!isLoading && !error && products.length > 0 && (
             <Card className="glass overflow-hidden rounded-xl border border-border/60">
-              <ScrollArea className="max-h-[70vh]">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
+              <Table containerClassName="max-h-[460px] md:max-h-[500px] lg:max-h-[calc(100vh-320px)] overflow-y-auto overflow-x-auto">
+                <TableHeader className="sticky top-0 z-10 bg-card/95 backdrop-blur shadow-sm [&_th]:bg-card/95 [&_th]:backdrop-blur">
+                  <TableRow>
                       <TableHead>Nome</TableHead>
                       <TableHead>Categoria</TableHead>
                       <TableHead>Tipo</TableHead>
@@ -467,9 +465,19 @@ export default function Produtos() {
                     })}
                   </TableBody>
                 </Table>
-              </ScrollArea>
-            </Card>
-          )}
+                <div className="flex items-center justify-between border-t border-border/60 px-4 py-2.5 text-xs text-muted-foreground bg-muted/20">
+                  <span>
+                    Mostrando <strong className="text-foreground">{products.length}</strong> de{" "}
+                    <strong className="text-foreground">{showInactive ? resolvedProducts.length : activeProducts.length}</strong> produtos
+                  </span>
+                  {products.length > 5 && (
+                    <span className="text-[11px] text-muted-foreground">
+                      Role a tabela para ver mais produtos ↓
+                    </span>
+                  )}
+                </div>
+              </Card>
+            )}
         </div>
 
         {/* Dialog controlado para oferecer Inativar quando delete for bloqueado por movimentações */}

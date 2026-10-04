@@ -534,7 +534,7 @@ export function ProductFormSheet({
           </Button>
         )}
       </SheetTrigger>
-      <SheetContent className="glass w-full max-w-lg border-l border-border/60 overflow-y-auto">
+      <SheetContent className="glass w-full sm:max-w-xl md:max-w-2xl border-l border-border/60 overflow-y-auto overflow-x-hidden p-4 sm:p-6">
         <SheetHeader>
           <SheetTitle className="text-xl font-bold flex items-center gap-2">
             <Package className="h-5 w-5 text-primary" />
@@ -698,7 +698,7 @@ export function ProductFormSheet({
                       type="button"
                       size="sm"
                       variant="outline"
-                      className="h-7 text-xs bg-background/90 hover:bg-background border-amber-500/50 font-semibold"
+                      className="h-auto min-h-7 py-1 px-2.5 text-xs whitespace-normal text-left bg-background/90 hover:bg-background border-amber-500/50 font-semibold"
                       onClick={handleAutoConvertAnomaly}
                     >
                       📦 Converter Saco de 25 kg ({new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(calculateUnitCost(numCurrentCost ?? 0, 25))}/{currentUnit})
@@ -707,7 +707,7 @@ export function ProductFormSheet({
                       type="button"
                       size="sm"
                       variant="ghost"
-                      className="h-7 text-xs"
+                      className="h-auto min-h-7 py-1 px-2.5 text-xs whitespace-normal text-left"
                       onClick={() => setShowPackagingCalc(true)}
                     >
                       Outro tamanho de embalagem…
@@ -720,9 +720,9 @@ export function ProductFormSheet({
 
           {/* CARD DE CUSTOS & EMBALAGEM DE COMPRA */}
           <div className="rounded-lg border border-border/80 bg-muted/20 p-3.5 space-y-3">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-1.5">
-                <Package className="h-4 w-4 text-primary" />
+                <Package className="h-4 w-4 text-primary shrink-0" />
                 <span className="text-xs font-semibold uppercase tracking-wider text-foreground">
                   Custo & Embalagem de Compra
                 </span>
@@ -731,11 +731,11 @@ export function ProductFormSheet({
                 type="button"
                 variant="outline"
                 size="sm"
-                className="h-7 text-xs gap-1 border-primary/30 text-primary hover:bg-primary/10"
+                className="h-auto min-h-7 py-1 px-2.5 text-xs gap-1 border-primary/30 text-primary hover:bg-primary/10 whitespace-normal text-left"
                 onClick={() => setShowPackagingCalc(!showPackagingCalc)}
               >
-                <Calculator className="h-3.5 w-3.5" />
-                {showPackagingCalc ? "Informar Custo Direto" : "📦 Calcular por Embalagem Fechada"}
+                <Calculator className="h-3.5 w-3.5 shrink-0" />
+                <span>{showPackagingCalc ? "Informar Custo Direto" : "📦 Calcular por Embalagem Fechada"}</span>
               </Button>
             </div>
 
@@ -751,8 +751,8 @@ export function ProductFormSheet({
                   </span>
                 </div>
 
-                <div className="grid grid-cols-12 gap-2">
-                  <div className="col-span-5 grid gap-1">
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
+                  <div className="sm:col-span-5 grid gap-1">
                     <Label className="text-xs">Tipo de Embalagem</Label>
                     <Select value={pkgName} onValueChange={setPkgName}>
                       <SelectTrigger className="h-8 text-xs">
@@ -768,7 +768,7 @@ export function ProductFormSheet({
                     </Select>
                   </div>
 
-                  <div className="col-span-3 grid gap-1">
+                  <div className="sm:col-span-3 grid gap-1">
                     <Label className="text-xs">Conteúdo ({currentUnit})</Label>
                     <Input
                       value={pkgSize}
@@ -779,7 +779,7 @@ export function ProductFormSheet({
                     />
                   </div>
 
-                  <div className="col-span-4 grid gap-1">
+                  <div className="sm:col-span-4 grid gap-1">
                     <Label className="text-xs">Preço Pago (R$)</Label>
                     <Input
                       value={pkgPrice}
@@ -793,7 +793,7 @@ export function ProductFormSheet({
 
                 {calcUnitCost > 0 && (
                   <div className="rounded-md bg-primary/10 border border-primary/20 p-2.5 text-xs space-y-1">
-                    <div className="flex justify-between items-center">
+                    <div className="flex flex-wrap justify-between items-center gap-1">
                       <span className="text-muted-foreground font-medium">Custo Unitário Calculado:</span>
                       <span className="font-extrabold text-primary text-sm">
                         {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(
@@ -802,7 +802,7 @@ export function ProductFormSheet({
                         / {currentUnit}
                       </span>
                     </div>
-                    <div className="flex justify-between items-center text-[11px] text-muted-foreground">
+                    <div className="flex flex-wrap justify-between items-center gap-1 text-[11px] text-muted-foreground">
                       <span>Memória de cálculo:</span>
                       <span>
                         {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(
@@ -812,7 +812,7 @@ export function ProductFormSheet({
                       </span>
                     </div>
                     {numCurrentStock > 0 && (
-                      <div className="flex justify-between items-center pt-1 border-t border-primary/20 font-semibold text-foreground">
+                      <div className="flex flex-wrap justify-between items-center gap-1 pt-1 border-t border-primary/20 font-semibold text-foreground">
                         <span>Valor do Estoque Atual ({numCurrentStock} {currentUnit}):</span>
                         <span className="text-emerald-600 dark:text-emerald-400">
                           {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(
@@ -868,7 +868,7 @@ export function ProductFormSheet({
 
           {/* ESTOQUE ATUAL */}
           <div className="grid gap-1.5">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-1">
               <Label htmlFor="current_stock" className="font-semibold text-foreground">
                 Estoque Inicial / Atual ({currentUnit})
               </Label>
