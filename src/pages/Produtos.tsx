@@ -11,6 +11,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { ProductRow, ProductType } from "@/types/inventory";
 import { resolveProductClassification } from "@/lib/productClassification";
 import { ProductFormSheet, type EditableProduct } from "@/components/inventory/ProductFormSheet";
+import { PriceHistoryDialog } from "@/components/inventory/PriceHistoryDialog";
 import { BomManagerDialog } from "@/components/production/BomManagerDialog";
 import { SpreadsheetDataImporter } from "@/components/organization/SpreadsheetDataImporter";
 import { StockQuickAdjust } from "@/components/inventory/StockQuickAdjust";
@@ -409,6 +410,24 @@ export default function Produtos() {
                                 trigger={
                                   <Button type="button" variant="outline" size="icon" aria-label="Editar">
                                     <Pencil className="h-4 w-4" />
+                                  </Button>
+                                }
+                              />
+                              <PriceHistoryDialog
+                                productId={p.id}
+                                productName={p.name}
+                                productUnit={p.unit}
+                                productType={p.type}
+                                currentCost={p.price_cost}
+                                trigger={
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="icon"
+                                    title="Histórico de Preços e Sazonalidade"
+                                    className="hover:text-emerald-600 hover:border-emerald-500/40"
+                                  >
+                                    <TrendingUp className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
                                   </Button>
                                 }
                               />

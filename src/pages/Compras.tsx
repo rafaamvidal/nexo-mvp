@@ -29,6 +29,7 @@ import {
 import { isForeignKeyViolation, toastDeleteBlocked } from "@/lib/supabaseErrors";
 import { useOrganization } from "@/contexts/OrganizationContext";
 import { parsePackageMetadata, calculateUnitCost } from "@/lib/packageConversion";
+import { insertPriceHistory } from "@/lib/priceHistoryApi";
 
 type SupplierRow = { id: string; name: string; observations?: string | null };
 type ProductRawRow = {
@@ -317,11 +318,28 @@ export default function Compras() {
           orgId: currentOrg?.id,
         });
       }
+
+      // Registro automático no Histórico de Preços para rastreamento de custos e sazonalidade
+      for (const it of valid) {
+        if (Number(it.unit_cost ?? 0) > 0) {
+          await insertPriceHistory({
+            product_id: it.product_id,
+            purchase_date: po.order_date || new Date().toISOString().slice(0, 10),
+            unit_price: Number(it.unit_cost),
+            supplier_id: po.supplier_id ?? null,
+            supplier_name: po.suppliers?.name ?? null,
+            notes: `Pedido #${po.code || po.id.slice(0, 6)} recebido`,
+            source: "compra",
+            organization_id: currentOrg?.id,
+          });
+        }
+      }
     },
     onSuccess: async () => {
       toast.success("Pedido recebido e estoque atualizado");
       await qc.invalidateQueries({ queryKey: ["purchase_orders"] });
       await qc.invalidateQueries({ queryKey: ["products"] });
+      await qc.invalidateQueries({ queryKey: ["product_price_history"] });
       await qc.invalidateQueries({ queryKey: ["financial_records"] });
     },
     onError: (e: any) => toast.error(e?.message ?? "Erro ao receber pedido"),

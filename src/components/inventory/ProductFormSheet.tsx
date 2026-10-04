@@ -4,9 +4,11 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Box, Calculator, Layers, Package, Tag, Wrench } from "lucide-react";
+import { AlertTriangle, Box, Calculator, Calendar, History, Layers, Package, Tag, Wrench } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { PriceHistoryDialog } from "@/components/inventory/PriceHistoryDialog";
+import { insertPriceHistory } from "@/lib/priceHistoryApi";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
@@ -196,6 +198,8 @@ export function ProductFormSheet({
   const [pkgName, setPkgName] = React.useState<string>("Saco");
   const [pkgSize, setPkgSize] = React.useState<string>("");
   const [pkgPrice, setPkgPrice] = React.useState<string>("");
+  const [purchaseDate, setPurchaseDate] = React.useState<string>(new Date().toISOString().slice(0, 10));
+  const [purchaseNotes, setPurchaseNotes] = React.useState<string>("");
   const qc = useQueryClient();
   const { currentOrg } = useOrganization();
 
@@ -276,6 +280,8 @@ export function ProductFormSheet({
     setReactivateDialogOpen(false);
     setReactivateCandidate(null);
     setPendingValues(null);
+    setPurchaseDate(new Date().toISOString().slice(0, 10));
+    setPurchaseNotes("");
     if (!product) {
       setShowPackagingCalc(false);
       setPkgName("Saco");
@@ -360,6 +366,21 @@ export function ProductFormSheet({
       } else if (error) {
         throw error;
       }
+
+      if (id && values.price_cost !== undefined && values.price_cost !== null && Number(values.price_cost) > 0) {
+        await insertPriceHistory({
+          product_id: id,
+          purchase_date: purchaseDate || new Date().toISOString().slice(0, 10),
+          unit_price: Number(values.price_cost),
+          package_price: pkgInfo ? pkgInfo.packagePrice : null,
+          package_size: pkgInfo ? pkgInfo.packageSize : null,
+          package_name: pkgInfo ? pkgInfo.packageName : null,
+          notes: purchaseNotes.trim() || null,
+          source: "cadastro",
+          organization_id: currentOrg?.id,
+        });
+        await qc.invalidateQueries({ queryKey: ["product_price_history", id] });
+      }
     },
     onSuccess: async () => {
       toast.success("Produto reativado com sucesso!");
@@ -411,36 +432,63 @@ export function ProductFormSheet({
         payload.organization_id = orgId;
       }
 
-      const query = product
-        ? supabase.from("products").update(payload).eq("id", product.id)
-        : supabase.from("products").insert(payload);
+      let savedId: string | null = product ? product.id : null;
 
-      let { error } = await query;
-      if (error && isProductsTypeCheckError(error)) {
-        console.warn("products_type_check disparado no banco. Aplicando compatibilidade transparente...");
-        const fallback = encodeProductClassificationFallback({
-          type: values.type,
-          category: values.category,
-        });
-
-        const fallbackPayload = {
-          ...payload,
-          type: fallback.type,
-          category: fallback.category,
-        };
-
-        const retryQuery = product
-          ? supabase.from("products").update(fallbackPayload).eq("id", product.id)
-          : supabase.from("products").insert(fallbackPayload);
-
-        const retryResult = await retryQuery;
-        if (retryResult.error) {
-          console.error("Falha no fallback de produto:", retryResult.error);
-          throw retryResult.error;
+      if (!product) {
+        let insertRes = await supabase.from("products").insert(payload).select("id").maybeSingle();
+        if (insertRes.error && isProductsTypeCheckError(insertRes.error)) {
+          console.warn("products_type_check disparado no banco. Aplicando compatibilidade transparente...");
+          const fallback = encodeProductClassificationFallback({
+            type: values.type,
+            category: values.category,
+          });
+          const fallbackPayload = {
+            ...payload,
+            type: fallback.type,
+            category: fallback.category,
+          };
+          insertRes = await supabase.from("products").insert(fallbackPayload).select("id").maybeSingle();
         }
-      } else if (error) {
-        console.error("Falha ao salvar produto no Supabase:", error);
-        throw error;
+        if (insertRes.error) {
+          console.error("Falha ao salvar produto no Supabase:", insertRes.error);
+          throw insertRes.error;
+        }
+        savedId = insertRes.data?.id ?? null;
+      } else {
+        let updateRes = await supabase.from("products").update(payload).eq("id", product.id);
+        if (updateRes.error && isProductsTypeCheckError(updateRes.error)) {
+          console.warn("products_type_check disparado no banco. Aplicando compatibilidade transparente...");
+          const fallback = encodeProductClassificationFallback({
+            type: values.type,
+            category: values.category,
+          });
+          const fallbackPayload = {
+            ...payload,
+            type: fallback.type,
+            category: fallback.category,
+          };
+          updateRes = await supabase.from("products").update(fallbackPayload).eq("id", product.id);
+        }
+        if (updateRes.error) {
+          console.error("Falha ao atualizar produto no Supabase:", updateRes.error);
+          throw updateRes.error;
+        }
+      }
+
+      // Se informou custo maior que zero, grava no histórico de preços com a data da compra informada
+      if (savedId && values.price_cost !== undefined && values.price_cost !== null && Number(values.price_cost) > 0) {
+        await insertPriceHistory({
+          product_id: savedId,
+          purchase_date: purchaseDate || new Date().toISOString().slice(0, 10),
+          unit_price: Number(values.price_cost),
+          package_price: pkgInfo ? pkgInfo.packagePrice : null,
+          package_size: pkgInfo ? pkgInfo.packageSize : null,
+          package_name: pkgInfo ? pkgInfo.packageName : null,
+          notes: purchaseNotes.trim() || null,
+          source: "cadastro",
+          organization_id: orgId,
+        });
+        await qc.invalidateQueries({ queryKey: ["product_price_history", savedId] });
       }
     },
     onSuccess: async () => {
@@ -727,16 +775,41 @@ export function ProductFormSheet({
                   Custo & Embalagem de Compra
                 </span>
               </div>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-auto min-h-7 py-1 px-2.5 text-xs gap-1 border-primary/30 text-primary hover:bg-primary/10 whitespace-normal text-left"
-                onClick={() => setShowPackagingCalc(!showPackagingCalc)}
-              >
-                <Calculator className="h-3.5 w-3.5 shrink-0" />
-                <span>{showPackagingCalc ? "Informar Custo Direto" : "📦 Calcular por Embalagem Fechada"}</span>
-              </Button>
+              <div className="flex flex-wrap items-center gap-2">
+                {product && (
+                  <PriceHistoryDialog
+                    productId={product.id}
+                    productName={form.watch("name") || product.name}
+                    productUnit={form.watch("unit") || product.unit}
+                    productType={form.watch("type") || product.type}
+                    currentCost={Number(form.watch("price_cost")) || product.price_cost}
+                    onCostUpdated={(newCost) => {
+                      form.setValue("price_cost", newCost, { shouldDirty: true, shouldValidate: true });
+                    }}
+                    trigger={
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-auto min-h-7 py-1 px-2.5 text-xs gap-1 border-primary/40 text-primary hover:bg-primary/10 whitespace-normal"
+                      >
+                        <History className="h-3.5 w-3.5" />
+                        <span>Histórico de Preços</span>
+                      </Button>
+                    }
+                  />
+                )}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-auto min-h-7 py-1 px-2.5 text-xs gap-1 border-primary/30 text-primary hover:bg-primary/10 whitespace-normal text-left"
+                  onClick={() => setShowPackagingCalc(!showPackagingCalc)}
+                >
+                  <Calculator className="h-3.5 w-3.5 shrink-0" />
+                  <span>{showPackagingCalc ? "Informar Custo Direto" : "📦 Calcular por Embalagem Fechada"}</span>
+                </Button>
+              </div>
             </div>
 
             {/* CALCULADORA DE EMBALAGEM FECHADA */}
@@ -861,6 +934,42 @@ export function ProductFormSheet({
                 )}
                 <p className="text-[11px] text-muted-foreground">
                   Preço cobrado aos clientes (obrigatório para produtos finais).
+                </p>
+              </div>
+            </div>
+
+            {/* DATA DA COMPRA E OBSERVAÇÃO DO HISTÓRICO */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-border/50">
+              <div className="grid gap-1.5">
+                <Label htmlFor="purchase_date" className="font-semibold text-foreground text-xs flex items-center gap-1.5">
+                  <Calendar className="h-3.5 w-3.5 text-primary" />
+                  Data da Compra / Cotação *
+                </Label>
+                <Input
+                  id="purchase_date"
+                  type="date"
+                  value={purchaseDate}
+                  onChange={(e) => setPurchaseDate(e.target.value)}
+                  className="h-8 text-xs font-medium"
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  Registra no histórico para rastrear sazonalidade de preços.
+                </p>
+              </div>
+
+              <div className="grid gap-1.5">
+                <Label htmlFor="purchase_notes" className="font-semibold text-foreground text-xs">
+                  Nota / Época da Compra (Opcional)
+                </Label>
+                <Input
+                  id="purchase_notes"
+                  placeholder="Ex: Safra de verão, Promoção distribuidor..."
+                  value={purchaseNotes}
+                  onChange={(e) => setPurchaseNotes(e.target.value)}
+                  className="h-8 text-xs"
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  Identifique o motivo, fornecedor ou época deste preço.
                 </p>
               </div>
             </div>
