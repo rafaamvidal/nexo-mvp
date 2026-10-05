@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, ChefHat, Package, Pencil, RefreshCw, Search, Trash2, TrendingUp } from "lucide-react";
+import { AlertTriangle, ChefHat, Factory, Package, Pencil, RefreshCw, Search, Trash2, TrendingUp } from "lucide-react";
 
 import { AppShell } from "@/components/layout/AppShell";
 import { Badge } from "@/components/ui/badge";
@@ -11,6 +11,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { ProductRow, ProductType } from "@/types/inventory";
 import { resolveProductClassification } from "@/lib/productClassification";
 import { ProductFormSheet, type EditableProduct } from "@/components/inventory/ProductFormSheet";
+import { ProduceBatchDialog } from "@/components/inventory/ProduceBatchDialog";
 import { PriceHistoryDialog } from "@/components/inventory/PriceHistoryDialog";
 import { BomManagerDialog } from "@/components/production/BomManagerDialog";
 import { SpreadsheetDataImporter } from "@/components/organization/SpreadsheetDataImporter";
@@ -407,20 +408,43 @@ export default function Produtos() {
                         <TableCell className="py-2.5 px-3 text-right whitespace-nowrap">
                           <div className="inline-flex items-center justify-end gap-1">
                             {p.type === "Produto Final" && (
-                              <BomManagerDialog
-                                defaultProductId={p.id}
-                                trigger={
-                                  <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    title="Ficha Técnica / Receita"
-                                    className="h-8 w-8 p-0"
-                                  >
-                                    <ChefHat className="h-4 w-4 text-primary" />
-                                  </Button>
-                                }
-                              />
+                              <>
+                                <ProduceBatchDialog
+                                  product={{
+                                    id: p.id,
+                                    name: p.name,
+                                    unit: p.unit,
+                                    current_stock: Number(p.current_stock ?? 0),
+                                    price_cost: p.price_cost,
+                                    price_sale: p.price_sale,
+                                  }}
+                                  trigger={
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      title="Apontar Fabricação / Novo Lote"
+                                      className="h-8 w-8 p-0 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 border-emerald-500/40"
+                                    >
+                                      <Factory className="h-4 w-4" />
+                                    </Button>
+                                  }
+                                />
+                                <BomManagerDialog
+                                  defaultProductId={p.id}
+                                  trigger={
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      title="Ficha Técnica / Receita"
+                                      className="h-8 w-8 p-0"
+                                    >
+                                      <ChefHat className="h-4 w-4 text-primary" />
+                                    </Button>
+                                  }
+                                />
+                              </>
                             )}
                             <ProductFormSheet
                               product={mappedEditable(p)}

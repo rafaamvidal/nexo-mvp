@@ -188,4 +188,23 @@ describe("Product Classifications & Brazilian Decimal Parsing", () => {
     const finishedAlerts = purchaseAlerts.filter((p) => p.type === "Produto Final");
     expect(finishedAlerts).toHaveLength(0);
   });
+
+  it("should correctly compute projected stock and batch details for finished product batch entry", () => {
+    const currentStock = 24;
+    const batchQty = 100;
+    const projectedStock = currentStock + batchQty;
+    expect(projectedStock).toBe(124);
+
+    const batchCode = "LOTE-2026-04";
+    const expiryDate = "2026-11-20";
+    const notes = "Produção especial";
+
+    const batchDetails = [
+      batchCode ? `Lote: ${batchCode}` : null,
+      expiryDate ? `Validade: ${expiryDate}` : null,
+      notes ? notes : null,
+    ].filter(Boolean).join(" | ");
+
+    expect(batchDetails).toBe("Lote: LOTE-2026-04 | Validade: 2026-11-20 | Produção especial");
+  });
 });

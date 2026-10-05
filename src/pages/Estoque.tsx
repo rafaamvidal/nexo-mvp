@@ -6,6 +6,7 @@ import {
   AlertTriangle,
   ArrowRight,
   Boxes,
+  Factory,
   History,
   Pencil,
   Search,
@@ -21,6 +22,7 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { StockQuickAdjust } from "@/components/inventory/StockQuickAdjust";
 import { StockEditDialog } from "@/components/inventory/StockEditDialog";
+import { ProduceBatchDialog } from "@/components/inventory/ProduceBatchDialog";
 import { StockMovementsHistory } from "@/components/inventory/StockMovementsHistory";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -204,7 +206,30 @@ export default function Estoque() {
                             <p className="mt-1 text-xs text-muted-foreground">Sem mínimo</p>
                           )}
                         </div>
-                        <div className="shrink-0">
+                        <div className="shrink-0 flex items-center gap-1.5">
+                          {isFinished && (
+                            <ProduceBatchDialog
+                              product={{
+                                id: p.id,
+                                name: p.name,
+                                unit: p.unit,
+                                current_stock: Number(p.current_stock ?? 0),
+                                price_cost: p.price_cost,
+                              }}
+                              trigger={
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-8 text-xs gap-1 border-primary/40 text-primary hover:bg-primary/10 px-2 font-medium"
+                                  title="Apontar Fabricação / Novo Lote"
+                                >
+                                  <Factory className="h-3.5 w-3.5" />
+                                  <span>Produzir</span>
+                                </Button>
+                              }
+                            />
+                          )}
                           <StockQuickAdjust productId={p.id} step={1} />
                         </div>
                       </CardContent>

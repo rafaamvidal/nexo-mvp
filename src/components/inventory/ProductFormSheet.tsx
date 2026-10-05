@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Box, Calculator, Calendar, History, Layers, Package, Tag, Wrench } from "lucide-react";
+import { AlertTriangle, Box, Calculator, Calendar, ChefHat, History, Layers, Package, Tag, Wrench } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { PriceHistoryDialog } from "@/components/inventory/PriceHistoryDialog";
@@ -369,7 +369,7 @@ export function ProductFormSheet({
         throw error;
       }
 
-      if (id && values.price_cost !== undefined && values.price_cost !== null && Number(values.price_cost) > 0) {
+      if (!isFinished && id && values.price_cost !== undefined && values.price_cost !== null && Number(values.price_cost) > 0) {
         await insertPriceHistory({
           product_id: id,
           purchase_date: purchaseDate || new Date().toISOString().slice(0, 10),
@@ -478,8 +478,8 @@ export function ProductFormSheet({
         }
       }
 
-      // Se informou custo maior que zero, grava no histórico de preços com a data da compra informada
-      if (savedId && values.price_cost !== undefined && values.price_cost !== null && Number(values.price_cost) > 0) {
+      // Se for matéria-prima ou insumo comprado e informou custo maior que zero, grava no histórico com data da compra
+      if (!isFinished && savedId && values.price_cost !== undefined && values.price_cost !== null && Number(values.price_cost) > 0) {
         await insertPriceHistory({
           product_id: savedId,
           purchase_date: purchaseDate || new Date().toISOString().slice(0, 10),
@@ -824,16 +824,18 @@ export function ProductFormSheet({
                     }
                   />
                 )}
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-auto min-h-7 py-1 px-2.5 text-xs gap-1 border-primary/30 text-primary hover:bg-primary/10 whitespace-normal text-left"
-                  onClick={() => setShowPackagingCalc(!showPackagingCalc)}
-                >
-                  <Calculator className="h-3.5 w-3.5 shrink-0" />
-                  <span>{showPackagingCalc ? "Informar Custo Direto" : "📦 Calcular por Embalagem Fechada"}</span>
-                </Button>
+                {!isFinishedProduct && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-auto min-h-7 py-1 px-2.5 text-xs gap-1 border-primary/30 text-primary hover:bg-primary/10 whitespace-normal text-left"
+                    onClick={() => setShowPackagingCalc(!showPackagingCalc)}
+                  >
+                    <Calculator className="h-3.5 w-3.5 shrink-0" />
+                    <span>{showPackagingCalc ? "Informar Custo Direto" : "📦 Calcular por Embalagem Fechada"}</span>
+                  </Button>
+                )}
               </div>
             </div>
 
@@ -963,49 +965,55 @@ export function ProductFormSheet({
               </div>
             </div>
 
-            {/* DATA DA COMPRA / FABRICAÇÃO E OBSERVAÇÃO DO HISTÓRICO */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-border/50">
-              <div className="grid gap-1.5">
-                <Label htmlFor="purchase_date" className="font-semibold text-foreground text-xs flex items-center gap-1.5">
-                  <Calendar className="h-3.5 w-3.5 text-primary" />
-                  {isFinishedProduct ? "Data de Fabricação *" : "Data da Compra / Cotação *"}
-                </Label>
-                <Input
-                  id="purchase_date"
-                  type="date"
-                  value={purchaseDate}
-                  onChange={(e) => setPurchaseDate(e.target.value)}
-                  className="h-8 text-xs font-medium"
-                />
-                <p className="text-[11px] text-muted-foreground">
-                  {isFinishedProduct
-                    ? "Data em que o lote do produto acabado foi fabricado."
-                    : "Registra no histórico para rastrear sazonalidade de preços."}
-                </p>
+            {isFinishedProduct ? (
+              <div className="rounded-md border border-primary/20 bg-primary/5 p-3 text-xs text-muted-foreground flex items-start gap-2.5">
+                <ChefHat className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <p className="font-semibold text-foreground">
+                    Cadastro Mestre Permanente do Produto Acabado
+                  </p>
+                  <p>
+                    Este cadastro define o produto de forma permanente (preço de venda e custo padrão). Para lançar cada nova fornada ou lote produzido ao longo do tempo com data e quantidade, utilize o botão <strong>"Produzir / Novo Lote"</strong> diretamente na tabela de produtos ou estoque.
+                  </p>
+                </div>
               </div>
+            ) : (
+              /* DATA DA COMPRA E OBSERVAÇÃO DO HISTÓRICO (apenas matérias-primas e insumos comprados) */
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-border/50">
+                <div className="grid gap-1.5">
+                  <Label htmlFor="purchase_date" className="font-semibold text-foreground text-xs flex items-center gap-1.5">
+                    <Calendar className="h-3.5 w-3.5 text-primary" />
+                    Data da Compra / Cotação *
+                  </Label>
+                  <Input
+                    id="purchase_date"
+                    type="date"
+                    value={purchaseDate}
+                    onChange={(e) => setPurchaseDate(e.target.value)}
+                    className="h-8 text-xs font-medium"
+                  />
+                  <p className="text-[11px] text-muted-foreground">
+                    Registra no histórico para rastrear sazonalidade de preços.
+                  </p>
+                </div>
 
-              <div className="grid gap-1.5">
-                <Label htmlFor="purchase_notes" className="font-semibold text-foreground text-xs">
-                  {isFinishedProduct ? "Lote / Observação da Fabricação (Opcional)" : "Nota / Época da Compra (Opcional)"}
-                </Label>
-                <Input
-                  id="purchase_notes"
-                  placeholder={
-                    isFinishedProduct
-                      ? "Ex: Lote 01, Fabricação matinal..."
-                      : "Ex: Safra de verão, Promoção distribuidor..."
-                  }
-                  value={purchaseNotes}
-                  onChange={(e) => setPurchaseNotes(e.target.value)}
-                  className="h-8 text-xs"
-                />
-                <p className="text-[11px] text-muted-foreground">
-                  {isFinishedProduct
-                    ? "Identifique o lote ou detalhes desta produção."
-                    : "Identifique o motivo, fornecedor ou época deste preço."}
-                </p>
+                <div className="grid gap-1.5">
+                  <Label htmlFor="purchase_notes" className="font-semibold text-foreground text-xs">
+                    Nota / Época da Compra (Opcional)
+                  </Label>
+                  <Input
+                    id="purchase_notes"
+                    placeholder="Ex: Safra de verão, Promoção distribuidor..."
+                    value={purchaseNotes}
+                    onChange={(e) => setPurchaseNotes(e.target.value)}
+                    className="h-8 text-xs"
+                  />
+                  <p className="text-[11px] text-muted-foreground">
+                    Identifique o motivo, fornecedor ou época deste preço.
+                  </p>
+                </div>
               </div>
-            </div>
+            )}
           </div>
 
           {/* ESTOQUE ATUAL */}
