@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { isForeignKeyViolation, toastDeleteBlocked } from "@/lib/supabaseErrors";
 import { useOrganization } from "@/contexts/OrganizationContext";
+import { formatDateBR } from "@/lib/masks";
 
 function formatBRL(value: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
@@ -166,6 +167,7 @@ export default function Vendas() {
   const [originalStatus, setOriginalStatus] = React.useState<string>("Pedido");
   const [originalItems, setOriginalItems] = React.useState<SaleItemDraft[]>([]);
   const [clientId, setClientId] = React.useState<string>("");
+  const [saleDate, setSaleDate] = React.useState<string>(() => new Date().toISOString().slice(0, 10));
   const [status, setStatus] = React.useState<string>("Pedido");
   const [items, setItems] = React.useState<SaleItemDraft[]>([{ product_id: "", quantity: 1 }]);
 
@@ -211,6 +213,7 @@ export default function Vendas() {
       };
 
       const clientName = (clients ?? []).find((c) => c.id === clientId)?.name ?? null;
+      const saleCreatedAt = saleDate ? new Date(`${saleDate}T12:00:00`).toISOString() : new Date().toISOString();
 
       if (!editingSaleId) {
         const { data: saleInserted, error: saleErr } = await supabase
@@ -220,6 +223,7 @@ export default function Vendas() {
             status,
             total_amount: total,
             gross_amount: total,
+            created_at: saleCreatedAt,
             organization_id: currentOrg?.id,
           } as any)
           .select("id")
@@ -263,10 +267,20 @@ export default function Vendas() {
           throw new Error("Venda cancelada: itens travados. Para ajustar itens, reabra o documento (fora do escopo do MVP).");
         }
 
-        // Atualiza venda (totais e status)
+        // Atualiza venda (totais, status e data da venda)
+        const updatePayload: any = {
+          client_id: clientId,
+          status: nextStatus,
+          total_amount: total,
+          gross_amount: total,
+        };
+        if (saleCreatedAt) {
+          updatePayload.created_at = saleCreatedAt;
+        }
+
         const { error: upSaleErr } = await supabase
           .from("sales")
-          .update({ client_id: clientId, status: nextStatus, total_amount: total, gross_amount: total } as any)
+          .update(updatePayload)
           .eq("id", saleId);
         if (upSaleErr) throw upSaleErr;
 
@@ -329,6 +343,7 @@ export default function Vendas() {
       setOpen(false);
       setEditingSaleId(null);
       setClientId("");
+      setSaleDate(new Date().toISOString().slice(0, 10));
       setStatus("Pedido");
       setItems([{ product_id: "", quantity: 1 }]);
       setOriginalItems([]);
@@ -363,6 +378,7 @@ export default function Vendas() {
     setOriginalStatus("Pedido");
     setOriginalItems([]);
     setClientId("");
+    setSaleDate(new Date().toISOString().slice(0, 10));
     setStatus("Pedido");
     setItems([{ product_id: "", quantity: 1 }]);
     setOpen(true);
@@ -372,6 +388,7 @@ export default function Vendas() {
     try {
       setEditingSaleId(sale.id);
       setClientId(sale.client_id ?? "");
+      setSaleDate(sale.created_at ? sale.created_at.slice(0, 10) : new Date().toISOString().slice(0, 10));
       setStatus(sale.status ?? "Pedido");
       setOriginalStatus(sale.status ?? "Pedido");
 
@@ -404,7 +421,7 @@ export default function Vendas() {
       filename: `vendas_${new Date().toISOString().slice(0, 10)}`,
       headers: ["Data", "Código", "Cliente", "Status", "Valor Total (R$)"],
       rows: (filtered ?? []).map((s) => [
-        new Date(s.created_at).toLocaleDateString("pt-BR"),
+        formatDateBR(s.created_at),
         s.code ?? s.id.slice(0, 8),
         s.clients?.name ?? "—",
         s.status ?? "—",
@@ -469,24 +486,35 @@ export default function Vendas() {
                   </Select>
                 </div>
 
-                <div className="grid gap-2">
-                  <Label>Status</Label>
-                  <Select value={status} onValueChange={setStatus}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Orçamento">Orçamento</SelectItem>
-                      <SelectItem value="Pedido">Pedido</SelectItem>
-                      <SelectItem value="Faturado">Faturado</SelectItem>
-                      <SelectItem value="Entregue">Entregue</SelectItem>
-                      <SelectItem value="Cancelado">Cancelado</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-muted-foreground">
-                    Estoque só é movimentado em <b>Faturado</b> e <b>Entregue</b>. Cancelado estorna se já havia movimentação.
-                  </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="grid gap-2">
+                    <Label>Data da Venda</Label>
+                    <Input
+                      type="date"
+                      value={saleDate}
+                      onChange={(e) => setSaleDate(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="grid gap-2">
+                    <Label>Status</Label>
+                    <Select value={status} onValueChange={setStatus}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Orçamento">Orçamento</SelectItem>
+                        <SelectItem value="Pedido">Pedido</SelectItem>
+                        <SelectItem value="Faturado">Faturado</SelectItem>
+                        <SelectItem value="Entregue">Entregue</SelectItem>
+                        <SelectItem value="Cancelado">Cancelado</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
+                <p className="-mt-2 text-xs text-muted-foreground">
+                  Estoque só é movimentado em <b>Faturado</b> e <b>Entregue</b>. Cancelado estorna se já havia movimentação.
+                </p>
 
                 <div className="grid gap-2">
                   <Label>Itens</Label>
@@ -609,7 +637,7 @@ export default function Vendas() {
                     {(filtered ?? []).map((s) => (
                       <TableRow key={s.id} className="odd:bg-muted/20">
                         <TableCell className="text-sm text-muted-foreground">
-                          {new Date(s.created_at).toLocaleDateString("pt-BR")}
+                          {formatDateBR(s.created_at)}
                         </TableCell>
                         <TableCell className="font-semibold">{s.clients?.name ?? "—"}</TableCell>
                         <TableCell>{s.status ?? "—"}</TableCell>

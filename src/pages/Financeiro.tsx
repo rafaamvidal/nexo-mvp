@@ -105,6 +105,7 @@ export default function Financeiro() {
   const [category, setCategory] = React.useState<string>("");
   const [amount, setAmount] = React.useState<number>(0);
   const [dueDate, setDueDate] = React.useState<string>(new Date().toISOString().slice(0, 10));
+  const [paymentDate, setPaymentDate] = React.useState<string>(new Date().toISOString().slice(0, 10));
   const [status, setStatus] = React.useState<string>("Aberto");
 
   // Form de edição
@@ -113,6 +114,7 @@ export default function Financeiro() {
   const [editCategory, setEditCategory] = React.useState<string>("");
   const [editAmount, setEditAmount] = React.useState<number>(0);
   const [editDueDate, setEditDueDate] = React.useState<string>(new Date().toISOString().slice(0, 10));
+  const [editPaymentDate, setEditPaymentDate] = React.useState<string>(new Date().toISOString().slice(0, 10));
   const [editStatus, setEditStatus] = React.useState<string>("Aberto");
 
   const todayStr = new Date().toISOString().slice(0, 10);
@@ -321,7 +323,7 @@ export default function Financeiro() {
           amount: Number(amount),
           due_date: dueDate,
           status,
-          payment_date: status === "Pago" ? todayStr : null,
+          payment_date: status === "Pago" ? (paymentDate || todayStr) : null,
           organization_id: currentOrg?.id,
           installment_number: 1,
           total_installments: 1,
@@ -339,7 +341,7 @@ export default function Financeiro() {
             amount: parcelVal,
             due_date: pDueDate,
             status: i === 1 && status === "Pago" ? "Pago" : "Aberto",
-            payment_date: i === 1 && status === "Pago" ? todayStr : null,
+            payment_date: i === 1 && status === "Pago" ? (paymentDate || todayStr) : null,
             organization_id: currentOrg?.id,
             installment_number: i,
             total_installments: count,
@@ -357,7 +359,7 @@ export default function Financeiro() {
             amount: Number(amount),
             due_date: pDueDate,
             status: i === 1 && status === "Pago" ? "Pago" : "Aberto",
-            payment_date: i === 1 && status === "Pago" ? todayStr : null,
+            payment_date: i === 1 && status === "Pago" ? (paymentDate || todayStr) : null,
             organization_id: currentOrg?.id,
             installment_number: i,
             total_installments: count,
@@ -393,6 +395,7 @@ export default function Financeiro() {
       setCategory("");
       setAmount(0);
       setDueDate(todayStr);
+      setPaymentDate(todayStr);
       setStatus("Aberto");
       setType("Receber");
       setEntryMode("single");
@@ -417,7 +420,7 @@ export default function Financeiro() {
           amount: Number(editAmount),
           due_date: editDueDate,
           status: editStatus,
-          payment_date: editStatus === "Pago" ? (editing.payment_date ?? todayStr) : null,
+          payment_date: editStatus === "Pago" ? (editPaymentDate || todayStr) : null,
         } as any)
         .eq("id", editing.id);
       if (error) throw error;
@@ -453,6 +456,7 @@ export default function Financeiro() {
     setEditCategory(r.category ?? "");
     setEditAmount(Number(r.amount ?? 0));
     setEditDueDate(r.due_date);
+    setEditPaymentDate(r.payment_date ? r.payment_date.slice(0, 10) : todayStr);
     setEditStatus(r.status ?? "Aberto");
     setEditOpen(true);
   };
@@ -696,6 +700,17 @@ export default function Financeiro() {
                     </SelectContent>
                   </Select>
                 </div>
+
+                {status === "Pago" && (
+                  <div className="grid gap-2">
+                    <Label>Data de Pagamento *</Label>
+                    <Input
+                      type="date"
+                      value={paymentDate}
+                      onChange={(e) => setPaymentDate(e.target.value)}
+                    />
+                  </div>
+                )}
 
                 <Button
                   type="button"
@@ -1268,6 +1283,17 @@ export default function Financeiro() {
                     </SelectContent>
                   </Select>
                 </div>
+
+                {editStatus === "Pago" && (
+                  <div className="grid gap-2">
+                    <Label>Data de Pagamento *</Label>
+                    <Input
+                      type="date"
+                      value={editPaymentDate}
+                      onChange={(e) => setEditPaymentDate(e.target.value)}
+                    />
+                  </div>
+                )}
 
                 <Button
                   type="button"
