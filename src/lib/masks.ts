@@ -65,3 +65,39 @@ export function getWhatsAppUrl(phone: string | null | undefined, text?: string):
   }
   return url.toString();
 }
+
+/**
+ * Formata data para o padrão brasileiro (DD/MM/AAAA).
+ * Trata strings no formato YYYY-MM-DD diretamente por partes,
+ * evitando a conversão indesejada de fuso horário UTC -> UTC-3
+ * que diminui 1 dia da data selecionada pelo usuário.
+ */
+export function formatDateBR(value: string | Date | null | undefined): string {
+  if (!value) return "—";
+
+  if (typeof value === "string") {
+    const clean = value.trim();
+    if (!clean) return "—";
+
+    // Padrão YYYY-MM-DD (data pura sem hora, ou com meia-noite T00:00:00)
+    const matchDateOnly = clean.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (matchDateOnly) {
+      if (clean.length === 10 || clean.includes("T00:00:00") || clean.includes(" 00:00:00")) {
+        const [, y, m, d] = matchDateOnly;
+        return `${d}/${m}/${y}`;
+      }
+    }
+
+    const d = new Date(clean);
+    if (isNaN(d.getTime())) return clean;
+    return d.toLocaleDateString("pt-BR");
+  }
+
+  if (value instanceof Date) {
+    if (isNaN(value.getTime())) return "—";
+    return value.toLocaleDateString("pt-BR");
+  }
+
+  return String(value);
+}
+

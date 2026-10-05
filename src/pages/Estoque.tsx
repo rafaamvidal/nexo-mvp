@@ -28,6 +28,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useOrganization } from "@/contexts/OrganizationContext";
 import { formatBRL } from "@/lib/masks";
+import { resolveProductClassification } from "@/lib/productClassification";
 
 type ProductLite = {
   id: string;
@@ -37,12 +38,14 @@ type ProductLite = {
   min_stock: number;
   category: string | null;
   price_cost: number | null;
+  type?: string | null;
+  description?: string | null;
 };
 
 async function fetchProductsLite(orgId?: string): Promise<ProductLite[]> {
   let query = supabase
     .from("products")
-    .select("id,name,unit,current_stock,min_stock,category,price_cost")
+    .select("id,name,unit,current_stock,min_stock,category,price_cost,type,description")
     .eq("status", "Ativo")
     .order("name", { ascending: true });
 
@@ -71,10 +74,20 @@ export default function Estoque() {
     return list.filter((p) => p.name.toLowerCase().includes(term) || (p.category ?? "").toLowerCase().includes(term));
   }, [data, q]);
 
-  // Alertas e Sugestões de Reposição
+  // Alertas e Sugestões de Reposição (apenas para matérias-primas e insumos com estoque mínimo > 0)
   const criticalItems = React.useMemo(() => {
     const list = data ?? [];
-    return list.filter((p) => Number(p.current_stock) <= Number(p.min_stock));
+    return list.filter((p) => {
+      const resolved = resolveProductClassification({
+        type: p.type as any,
+        category: p.category,
+        description: p.description,
+      });
+      if (resolved.type === "Produto Final") return false;
+      const min = Number(p.min_stock ?? 0);
+      if (min <= 0) return false;
+      return Number(p.current_stock) <= min;
+    });
   }, [data]);
 
   const ruptureCount = React.useMemo(() => {
@@ -148,7 +161,14 @@ export default function Estoque() {
                 {isLoading && Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-32 rounded-xl" />)}
 
                 {!isLoading && !error && filtered.map((p) => {
-                  const low = Number(p.current_stock) < Number(p.min_stock);
+                  const resolved = resolveProductClassification({
+                    type: p.type as any,
+                    category: p.category,
+                    description: p.description,
+                  });
+                  const isFinished = resolved.type === "Produto Final";
+                  const minVal = Number(p.min_stock ?? 0);
+                  const low = !isFinished && minVal > 0 && Number(p.current_stock) < minVal;
                   return (
                     <Card key={p.id} className="glass border-border/60 transition-shadow hover:shadow-sm">
                       <CardHeader className="pb-2">
@@ -176,7 +196,13 @@ export default function Estoque() {
                       <CardContent className="flex items-center justify-between gap-3">
                         <div className="min-w-0">
                           <p className="truncate text-xs text-muted-foreground">{p.category ?? "Sem categoria"}</p>
-                          <p className="mt-1 text-xs text-muted-foreground">Mínimo: {p.min_stock}</p>
+                          {isFinished ? (
+                            <p className="mt-1 text-xs text-muted-foreground font-medium">Fabricação própria</p>
+                          ) : minVal > 0 ? (
+                            <p className="mt-1 text-xs text-muted-foreground">Mínimo: {p.min_stock}</p>
+                          ) : (
+                            <p className="mt-1 text-xs text-muted-foreground">Sem mínimo</p>
+                          )}
                         </div>
                         <div className="shrink-0">
                           <StockQuickAdjust productId={p.id} step={1} />

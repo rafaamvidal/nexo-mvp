@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { cleanDigits, maskCpfCnpj, maskPhone, maskCep, formatBRL, getWhatsAppUrl } from "@/lib/masks";
+import { cleanDigits, maskCpfCnpj, maskPhone, maskCep, formatBRL, getWhatsAppUrl, formatDateBR } from "@/lib/masks";
 
 describe("lib/masks", () => {
   it("cleanDigits should extract only numbers", () => {
@@ -36,5 +36,16 @@ describe("lib/masks", () => {
 
     const nullUrl = getWhatsAppUrl("123");
     expect(nullUrl).toBeNull();
+  });
+
+  it("formatDateBR should format YYYY-MM-DD correctly without timezone day subtraction", () => {
+    // Caso exato relatado pelo usuário: 2026-09-21 não pode virar 20/09/2026
+    expect(formatDateBR("2026-09-21")).toBe("21/09/2026");
+    expect(formatDateBR("2024-02-15")).toBe("15/02/2024");
+    expect(formatDateBR("2026-01-01")).toBe("01/01/2026");
+    expect(formatDateBR("2026-09-21T00:00:00")).toBe("21/09/2026");
+    expect(formatDateBR(null)).toBe("—");
+    expect(formatDateBR(undefined)).toBe("—");
+    expect(formatDateBR("")).toBe("—");
   });
 });

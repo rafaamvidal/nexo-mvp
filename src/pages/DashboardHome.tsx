@@ -34,7 +34,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { supabase } from "@/integrations/supabase/client";
-import { formatBRL } from "@/lib/masks";
+import { formatBRL, formatDateBR } from "@/lib/masks";
+import { resolveProductClassification } from "@/lib/productClassification";
 
 type DashboardData = {
   activeProducts: number;
@@ -85,7 +86,7 @@ async function fetchDashboardData(orgId?: string): Promise<DashboardData> {
   let finQuery = supabase.from("financial_records").select("amount,type,due_date").gte("due_date", start.slice(0, 10)).lte("due_date", end.slice(0, 10));
   let itemsQuery = supabase.from("sale_items").select("total, products(name), sales(created_at)");
   let sales30Query = supabase.from("sales").select("total_amount,created_at").gte("created_at", start30).lte("created_at", new Date().toISOString());
-  let allProdsQuery = supabase.from("products").select("id,name,current_stock,min_stock,unit,status").eq("status", "Ativo");
+  let allProdsQuery = supabase.from("products").select("id,name,current_stock,min_stock,unit,status,type,category,description").eq("status", "Ativo");
   let urgentFinQuery = supabase.from("financial_records").select("id,description,amount,due_date,type").eq("status", "Aberto").lte("due_date", todayStr).order("due_date", { ascending: true }).limit(10);
 
   if (orgId) {
@@ -181,16 +182,29 @@ async function fetchDashboardData(orgId?: string): Promise<DashboardData> {
     return { date: d, value: running };
   });
 
-  // Alertas críticos
+  // Alertas críticos (apenas insumos e matérias-primas com estoque mínimo configurado)
   const allProds = (allProductsRes.data ?? []) as Array<{
     id: string;
     name: string;
     current_stock: number;
     min_stock: number;
     unit: string;
+    type?: string | null;
+    category?: string | null;
+    description?: string | null;
   }>;
   const criticalStock = allProds
-    .filter((p) => Number(p.current_stock) <= Number(p.min_stock))
+    .filter((p) => {
+      const resolved = resolveProductClassification({
+        type: p.type as any,
+        category: p.category,
+        description: p.description,
+      });
+      if (resolved.type === "Produto Final") return false;
+      const min = Number(p.min_stock ?? 0);
+      if (min <= 0) return false;
+      return Number(p.current_stock) <= min;
+    })
     .slice(0, 5);
 
   const urgentFinancial = ((urgentFinRes.data ?? []) as unknown as Array<{
@@ -438,7 +452,7 @@ export default function DashboardHome() {
                               <p className="font-medium text-foreground truncate">{f.description}</p>
                               <span className="text-[10px] text-muted-foreground">
                                 {isOverdue ? "Venceu em: " : "Vence hoje: "}
-                                {new Date(f.due_date + "T00:00:00").toLocaleDateString("pt-BR")}
+                                {formatDateBR(f.due_date)}
                               </span>
                             </div>
                             <span

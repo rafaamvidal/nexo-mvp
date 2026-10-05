@@ -140,7 +140,11 @@ export default function Produtos() {
   }, [activeProducts, resolvedProducts, filter, q, showInactive]);
 
   const lowStockCount = React.useMemo(
-    () => activeProducts.filter((p) => Number(p.current_stock) < Number(p.min_stock)).length,
+    () =>
+      activeProducts.filter((p) => {
+        const min = Number(p.min_stock ?? 0);
+        return p.type !== "Produto Final" && min > 0 && Number(p.current_stock) < min;
+      }).length,
     [activeProducts],
   );
 
@@ -353,7 +357,8 @@ export default function Produtos() {
                 </TableHeader>
                 <TableBody>
                   {products.map((p) => {
-                    const low = Number(p.current_stock) < Number(p.min_stock);
+                    const min = Number(p.min_stock ?? 0);
+                    const low = p.type !== "Produto Final" && min > 0 && Number(p.current_stock) < min;
                     const inactive = (p.status ?? "Ativo") === "Inativo";
                     const pkg = parsePackageMetadata(p.description);
                     return (

@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { formatDateBR } from "@/lib/masks";
 import type { Employee, EmployeeVacation, VacationStatus } from "@/types/rh";
 
 interface VacationDialogProps {
@@ -148,7 +149,7 @@ export function VacationDialog({
             </Select>
             {selectedEmp && (
               <p className="text-xs text-muted-foreground">
-                Setor: {selectedEmp.department} | Admissão: {new Date(selectedEmp.admission_date).toLocaleDateString("pt-BR")}
+                Setor: {selectedEmp.department} | Admissão: {formatDateBR(selectedEmp.admission_date)}
               </p>
             )}
           </div>
@@ -183,7 +184,7 @@ export function VacationDialog({
           <div className="rounded-lg border bg-muted/15 p-3 text-xs flex justify-between items-center">
             <span className="text-muted-foreground font-medium">Data de Retorno Prevista:</span>
             <span className="font-bold text-foreground">
-              {calculatedEndDate ? new Date(calculatedEndDate).toLocaleDateString("pt-BR") : "—"}
+              {calculatedEndDate ? formatDateBR(calculatedEndDate) : "—"}
             </span>
           </div>
 

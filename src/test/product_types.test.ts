@@ -123,4 +123,69 @@ describe("Product Classifications & Brazilian Decimal Parsing", () => {
     expect(directResolved.type).toBe("Utensílio / Ferramenta");
     expect(directResolved.category).toBe("Formas de Chocolate");
   });
+
+  it("should ensure finished products (Produto Final) do not trigger purchase/replenishment alerts", () => {
+    const products = [
+      {
+        id: "1",
+        name: "Trufa Don Juan Tradicional",
+        type: "Produto Final",
+        current_stock: 0,
+        min_stock: 0,
+        price_cost: 0.65,
+      },
+      {
+        id: "2",
+        name: "Trufa Maracujá 45g",
+        type: "Produto Final",
+        current_stock: 5,
+        min_stock: 20, // Antigo min_stock herdado
+        price_cost: 0.70,
+      },
+      {
+        id: "3",
+        name: "Cacau em Pó 100%",
+        type: "Matéria-Prima",
+        current_stock: 2,
+        min_stock: 10,
+        price_cost: 45.0,
+      },
+      {
+        id: "4",
+        name: "Caixa Padrão Don Juan",
+        type: "Embalagem",
+        current_stock: 15,
+        min_stock: 100,
+        price_cost: 1.20,
+      },
+      {
+        id: "5",
+        name: "Fita Decorativa Dourada",
+        type: "Embalagem",
+        current_stock: 0,
+        min_stock: 0, // Sem estoque mínimo configurado
+        price_cost: 0.50,
+      },
+    ];
+
+    // Função de filtro de reposição/alerta de compra
+    const purchaseAlerts = products.filter((p) => {
+      const resolved = resolveProductClassification(p);
+      if (resolved.type === "Produto Final") return false;
+      const min = Number(p.min_stock ?? 0);
+      if (min <= 0) return false;
+      return Number(p.current_stock) <= min;
+    });
+
+    // Apenas Cacau (Matéria-Prima) e Caixa (Embalagem) devem gerar alerta de compra
+    expect(purchaseAlerts).toHaveLength(2);
+    expect(purchaseAlerts.map((p) => p.name)).toEqual([
+      "Cacau em Pó 100%",
+      "Caixa Padrão Don Juan",
+    ]);
+
+    // Trufas (Produto Final) nunca devem aparecer em alertas de compra
+    const finishedAlerts = purchaseAlerts.filter((p) => p.type === "Produto Final");
+    expect(finishedAlerts).toHaveLength(0);
+  });
 });

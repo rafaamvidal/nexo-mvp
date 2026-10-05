@@ -222,6 +222,7 @@ export function ProductFormSheet({
 
   const currentUnit = form.watch("unit") || "un";
   const currentType = form.watch("type");
+  const isFinishedProduct = currentType === "Produto Final";
   const currentCostValue = form.watch("price_cost");
   const currentStockValue = form.watch("current_stock");
 
@@ -338,6 +339,7 @@ export function ProductFormSheet({
           : null;
       const finalDescription = encodePackageMetadata(pkgInfo, product?.description);
 
+      const isFinished = values.type === "Produto Final";
       const payload: any = {
         status: "Ativo",
         name: normalizeName(values.name),
@@ -346,7 +348,7 @@ export function ProductFormSheet({
         description: finalDescription,
         unit: values.unit,
         current_stock: values.current_stock,
-        min_stock: values.min_stock,
+        min_stock: isFinished ? 0 : values.min_stock,
         price_cost: values.price_cost ?? null,
         price_sale: values.price_sale ?? null,
       };
@@ -376,7 +378,7 @@ export function ProductFormSheet({
           package_size: pkgInfo ? pkgInfo.packageSize : null,
           package_name: pkgInfo ? pkgInfo.packageName : null,
           notes: purchaseNotes.trim() || null,
-          source: "cadastro",
+          source: isFinished ? "fabricacao" : "cadastro",
           organization_id: currentOrg?.id,
         });
         await qc.invalidateQueries({ queryKey: ["product_price_history", id] });
@@ -415,6 +417,7 @@ export function ProductFormSheet({
           : null;
       const finalDescription = encodePackageMetadata(pkgInfo, product?.description);
 
+      const isFinished = values.type === "Produto Final";
       const payload: any = {
         name: normalizeName(values.name),
         type: values.type,
@@ -422,7 +425,7 @@ export function ProductFormSheet({
         description: finalDescription,
         unit: values.unit,
         current_stock: values.current_stock ?? 0,
-        min_stock: values.min_stock ?? 0,
+        min_stock: isFinished ? 0 : (values.min_stock ?? 0),
         price_cost: values.price_cost !== undefined ? values.price_cost : null,
         price_sale: values.price_sale !== undefined ? values.price_sale : null,
         status: "Ativo",
@@ -485,7 +488,7 @@ export function ProductFormSheet({
           package_size: pkgInfo ? pkgInfo.packageSize : null,
           package_name: pkgInfo ? pkgInfo.packageName : null,
           notes: purchaseNotes.trim() || null,
-          source: "cadastro",
+          source: isFinished ? "fabricacao" : "cadastro",
           organization_id: orgId,
         });
         await qc.invalidateQueries({ queryKey: ["product_price_history", savedId] });
@@ -506,10 +509,18 @@ export function ProductFormSheet({
   const onSubmit = form.handleSubmit(
     async (values) => {
       try {
+        const isFinished = values.type === "Produto Final";
         const normalizedUnit = normalizeUnit(values.unit);
-        const normalizedValues = { ...values, unit: normalizedUnit };
+        const normalizedValues = {
+          ...values,
+          unit: normalizedUnit,
+          min_stock: isFinished ? 0 : (values.min_stock ?? 0),
+        };
         if (normalizedUnit !== values.unit) {
           form.setValue("unit", normalizedUnit, { shouldDirty: true });
+        }
+        if (isFinished && values.min_stock !== 0) {
+          form.setValue("min_stock", 0, { shouldDirty: true });
         }
 
         if (product) {
@@ -613,7 +624,12 @@ export function ProductFormSheet({
             </Label>
             <Select
               value={form.watch("type")}
-              onValueChange={(v) => form.setValue("type", v, { shouldValidate: true })}
+              onValueChange={(v) => {
+                form.setValue("type", v, { shouldValidate: true });
+                if (v === "Produto Final") {
+                  form.setValue("min_stock", 0, { shouldValidate: true });
+                }
+              }}
             >
               <SelectTrigger id="type" className="h-auto py-2.5">
                 <SelectValue placeholder="Selecione a classificação..." />
@@ -693,16 +709,25 @@ export function ProductFormSheet({
 
             <div className="grid gap-1.5">
               <Label htmlFor="min_stock" className="font-semibold text-foreground">
-                Estoque Mínimo (Alerta)
+                Estoque Mínimo {isFinishedProduct ? "(Não aplicável)" : "(Alerta)"}
               </Label>
               <Input
                 id="min_stock"
                 inputMode="decimal"
                 placeholder="0"
-                {...form.register("min_stock")}
+                disabled={isFinishedProduct}
+                value={isFinishedProduct ? "0" : undefined}
+                {...(!isFinishedProduct ? form.register("min_stock") : {})}
+                className={isFinishedProduct ? "bg-muted/50 cursor-not-allowed text-muted-foreground" : ""}
               />
-              {form.formState.errors.min_stock && (
-                <p className="text-xs font-medium text-destructive">{form.formState.errors.min_stock.message}</p>
+              {isFinishedProduct ? (
+                <p className="text-[11px] text-muted-foreground">
+                  Produtos acabados são produzidos internamente e não utilizam estoque mínimo nem geram alertas de compra.
+                </p>
+              ) : (
+                form.formState.errors.min_stock && (
+                  <p className="text-xs font-medium text-destructive">{form.formState.errors.min_stock.message}</p>
+                )
               )}
             </div>
           </div>
@@ -766,13 +791,13 @@ export function ProductFormSheet({
             </div>
           )}
 
-          {/* CARD DE CUSTOS & EMBALAGEM DE COMPRA */}
+          {/* CARD DE CUSTOS & HISTÓRICO */}
           <div className="rounded-lg border border-border/80 bg-muted/20 p-3.5 space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-1.5">
                 <Package className="h-4 w-4 text-primary shrink-0" />
                 <span className="text-xs font-semibold uppercase tracking-wider text-foreground">
-                  Custo & Embalagem de Compra
+                  {isFinishedProduct ? "Custo de Produção & Venda" : "Custo & Embalagem de Compra"}
                 </span>
               </div>
               <div className="flex flex-wrap items-center gap-2">
@@ -794,7 +819,7 @@ export function ProductFormSheet({
                         className="h-auto min-h-7 py-1 px-2.5 text-xs gap-1 border-primary/40 text-primary hover:bg-primary/10 whitespace-normal"
                       >
                         <History className="h-3.5 w-3.5" />
-                        <span>Histórico de Preços</span>
+                        <span>{isFinishedProduct ? "Histórico de Fabricação" : "Histórico de Preços"}</span>
                       </Button>
                     }
                   />
@@ -938,12 +963,12 @@ export function ProductFormSheet({
               </div>
             </div>
 
-            {/* DATA DA COMPRA E OBSERVAÇÃO DO HISTÓRICO */}
+            {/* DATA DA COMPRA / FABRICAÇÃO E OBSERVAÇÃO DO HISTÓRICO */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-border/50">
               <div className="grid gap-1.5">
                 <Label htmlFor="purchase_date" className="font-semibold text-foreground text-xs flex items-center gap-1.5">
                   <Calendar className="h-3.5 w-3.5 text-primary" />
-                  Data da Compra / Cotação *
+                  {isFinishedProduct ? "Data de Fabricação *" : "Data da Compra / Cotação *"}
                 </Label>
                 <Input
                   id="purchase_date"
@@ -953,23 +978,31 @@ export function ProductFormSheet({
                   className="h-8 text-xs font-medium"
                 />
                 <p className="text-[11px] text-muted-foreground">
-                  Registra no histórico para rastrear sazonalidade de preços.
+                  {isFinishedProduct
+                    ? "Data em que o lote do produto acabado foi fabricado."
+                    : "Registra no histórico para rastrear sazonalidade de preços."}
                 </p>
               </div>
 
               <div className="grid gap-1.5">
                 <Label htmlFor="purchase_notes" className="font-semibold text-foreground text-xs">
-                  Nota / Época da Compra (Opcional)
+                  {isFinishedProduct ? "Lote / Observação da Fabricação (Opcional)" : "Nota / Época da Compra (Opcional)"}
                 </Label>
                 <Input
                   id="purchase_notes"
-                  placeholder="Ex: Safra de verão, Promoção distribuidor..."
+                  placeholder={
+                    isFinishedProduct
+                      ? "Ex: Lote 01, Fabricação matinal..."
+                      : "Ex: Safra de verão, Promoção distribuidor..."
+                  }
                   value={purchaseNotes}
                   onChange={(e) => setPurchaseNotes(e.target.value)}
                   className="h-8 text-xs"
                 />
                 <p className="text-[11px] text-muted-foreground">
-                  Identifique o motivo, fornecedor ou época deste preço.
+                  {isFinishedProduct
+                    ? "Identifique o lote ou detalhes desta produção."
+                    : "Identifique o motivo, fornecedor ou época deste preço."}
                 </p>
               </div>
             </div>

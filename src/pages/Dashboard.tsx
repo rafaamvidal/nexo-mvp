@@ -92,8 +92,12 @@ export default function Dashboard() {
   }, [resolvedData, filter]);
 
   const lowStockCount = React.useMemo(
-    () => (data ?? []).filter((p) => Number(p.current_stock) < Number(p.min_stock)).length,
-    [data],
+    () =>
+      (resolvedData ?? []).filter((p) => {
+        const min = Number(p.min_stock ?? 0);
+        return p.type !== "Produto Final" && min > 0 && Number(p.current_stock) < min;
+      }).length,
+    [resolvedData],
   );
 
   const totalStockValue = React.useMemo(() => {
@@ -242,7 +246,8 @@ export default function Dashboard() {
                 </TableHeader>
                 <TableBody>
                   {products.map((p) => {
-                    const low = Number(p.current_stock) < Number(p.min_stock);
+                    const min = Number(p.min_stock ?? 0);
+                    const low = p.type !== "Produto Final" && min > 0 && Number(p.current_stock) < min;
                     return (
                       <TableRow key={p.id} className="odd:bg-muted/20">
                         <TableCell className="font-semibold">

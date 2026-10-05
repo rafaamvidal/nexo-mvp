@@ -47,7 +47,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { isForeignKeyViolation, toastDeleteBlocked } from "@/lib/supabaseErrors";
-import { formatBRL } from "@/lib/masks";
+import { formatBRL, formatDateBR } from "@/lib/masks";
 import { useOrganization } from "@/contexts/OrganizationContext";
 
 type FinRow = {
@@ -913,13 +913,13 @@ export default function Financeiro() {
                       return (
                         <TableRow key={r.id} className="odd:bg-muted/15">
                           <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
-                            {new Date(r.due_date + "T00:00:00").toLocaleDateString("pt-BR")}
+                            {formatDateBR(r.due_date)}
                           </TableCell>
                           <TableCell>
                             <div className="font-semibold text-sm">{r.description}</div>
                             {r.payment_date && (
                               <span className="text-[11px] text-muted-foreground">
-                                Pago em: {new Date(r.payment_date + "T00:00:00").toLocaleDateString("pt-BR")}
+                                Pago em: {formatDateBR(r.payment_date)}
                               </span>
                             )}
                           </TableCell>

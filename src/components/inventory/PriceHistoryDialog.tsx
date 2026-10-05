@@ -54,6 +54,7 @@ import {
 import { useOrganization } from "@/contexts/OrganizationContext";
 import { supabase } from "@/integrations/supabase/client";
 import { calculateUnitCost, COMMON_PACKAGE_TYPES } from "@/lib/packageConversion";
+import { formatBRL, formatDateBR } from "@/lib/masks";
 import {
   computeSeasonalityMetrics,
   deletePriceHistory,
@@ -61,17 +62,6 @@ import {
   insertPriceHistory,
 } from "@/lib/priceHistoryApi";
 import type { PriceHistoryRecord } from "@/types/priceHistory";
-
-function formatBRL(value: number) {
-  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
-}
-
-function formatDateBR(dateStr: string) {
-  if (!dateStr) return "—";
-  const [y, m, d] = dateStr.split("-");
-  if (y && m && d) return `${d}/${m}/${y}`;
-  return dateStr;
-}
 
 interface PriceHistoryDialogProps {
   productId: string;
@@ -161,14 +151,16 @@ export function PriceHistoryDialog({
     ? calculateUnitCost(numPkgPrice, numPkgSize)
     : Number(costInput.replace(",", ".")) || 0;
 
+  const isFinishedProduct = productType === "Produto Final";
+
   // Mutação para adicionar novo registro
   const addMutation = useMutation({
     mutationFn: async () => {
       if (calculatedUnitCost <= 0) {
-        throw new Error("Informe um valor de compra válido maior que zero.");
+        throw new Error(isFinishedProduct ? "Informe um custo unitário válido maior que zero." : "Informe um valor de compra válido maior que zero.");
       }
       if (!purchaseDate) {
-        throw new Error("Selecione a data da compra.");
+        throw new Error(isFinishedProduct ? "Selecione a data de fabricação." : "Selecione a data da compra.");
       }
 
       const supplierObj = suppliers.find((s) => s.id === selectedSupplierId);
@@ -184,7 +176,7 @@ export function PriceHistoryDialog({
         supplier_id: supplierObj ? supplierObj.id : null,
         supplier_name: supplierName,
         notes: notes.trim() || null,
-        source: "manual",
+        source: isFinishedProduct ? "fabricacao" : "manual",
         organization_id: currentOrg?.id,
       });
 
@@ -200,7 +192,7 @@ export function PriceHistoryDialog({
       return record;
     },
     onSuccess: async () => {
-      toast.success("Compra registrada no histórico com sucesso!");
+      toast.success(isFinishedProduct ? "Registro de fabricação adicionado com sucesso!" : "Compra registrada no histórico com sucesso!");
       await qc.invalidateQueries({ queryKey: ["product_price_history", productId] });
       await qc.invalidateQueries({ queryKey: ["products"] });
       // Limpa formulário
@@ -211,7 +203,7 @@ export function PriceHistoryDialog({
       setShowAddForm(false);
     },
     onError: (err: any) => {
-      toast.error(err?.message ?? "Falha ao registrar histórico de compra.");
+      toast.error(err?.message ?? (isFinishedProduct ? "Falha ao registrar histórico de fabricação." : "Falha ao registrar histórico de compra."));
     },
   });
 
@@ -251,7 +243,7 @@ export function PriceHistoryDialog({
             <div>
               <DialogTitle className="text-xl font-bold flex items-center gap-2">
                 <History className="h-5 w-5 text-primary" />
-                Histórico de Preços & Sazonalidade
+                {isFinishedProduct ? "Histórico de Fabricação & Custos" : "Histórico de Preços & Sazonalidade"}
               </DialogTitle>
               <DialogDescription className="mt-1 text-sm text-muted-foreground flex flex-wrap items-center gap-2">
                 <strong className="text-foreground">{productName}</strong>
@@ -280,7 +272,7 @@ export function PriceHistoryDialog({
               onClick={() => setShowAddForm(!showAddForm)}
             >
               <Plus className="h-4 w-4" />
-              {showAddForm ? "Fechar Formulário" : "Nova Compra / Cotação"}
+              {showAddForm ? "Fechar Formulário" : (isFinishedProduct ? "Nova Fabricação / Lote" : "Nova Compra / Cotação")}
             </Button>
           </div>
         </DialogHeader>
@@ -291,18 +283,18 @@ export function PriceHistoryDialog({
             <div className="flex items-center justify-between">
               <span className="text-sm font-bold text-foreground flex items-center gap-1.5">
                 <Calendar className="h-4 w-4 text-primary" />
-                Registrar Nova Compra ou Cotação Histórica
+                {isFinishedProduct ? "Registrar Nova Fabricação ou Lote Histórico" : "Registrar Nova Compra ou Cotação Histórica"}
               </span>
               <span className="text-xs text-muted-foreground">
-                Permite lançar compras atuais ou retroativas
+                {isFinishedProduct ? "Permite lançar produções atuais ou retroativas" : "Permite lançar compras atuais ou retroativas"}
               </span>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
-              {/* DATA DA COMPRA */}
+              {/* DATA DA COMPRA / FABRICAÇÃO */}
               <div className="sm:col-span-4 grid gap-1">
                 <Label htmlFor="purchase_date" className="text-xs font-semibold">
-                  Data da Compra / Cotação *
+                  {isFinishedProduct ? "Data de Fabricação *" : "Data da Compra / Cotação *"}
                 </Label>
                 <Input
                   id="purchase_date"
@@ -422,11 +414,15 @@ export function PriceHistoryDialog({
                 </div>
                 <div className="sm:col-span-6 grid gap-1">
                   <Label htmlFor="notes" className="text-xs font-semibold">
-                    Observações / Época (Opcional)
+                    {isFinishedProduct ? "Lote / Detalhes da Fabricação (Opcional)" : "Observações / Época (Opcional)"}
                   </Label>
                   <Input
                     id="notes"
-                    placeholder="Ex: Safra de verão, Distribuidor X, Promoção..."
+                    placeholder={
+                      isFinishedProduct
+                        ? "Ex: Lote 01, Turno matinal, Produção especial..."
+                        : "Ex: Safra de verão, Distribuidor X, Promoção..."
+                    }
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
                     className="h-8 text-xs bg-background"

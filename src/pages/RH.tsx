@@ -45,7 +45,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { exportToCsv } from "@/lib/exportCsv";
-import { formatBRL } from "@/lib/masks";
+import { formatBRL, formatDateBR } from "@/lib/masks";
 import { useOrganization } from "@/contexts/OrganizationContext";
 import { EmployeeDialog } from "@/components/rh/EmployeeDialog";
 import { VacationDialog } from "@/components/rh/VacationDialog";
@@ -278,7 +278,7 @@ export default function RH() {
       e.role,
       e.department,
       e.contract_type,
-      new Date(e.admission_date).toLocaleDateString("pt-BR"),
+      formatDateBR(e.admission_date),
       e.status,
       Number(e.base_salary || 0),
       Number(e.benefits_total || 0),
@@ -552,7 +552,7 @@ export default function RH() {
                           <Badge variant="secondary">{emp.contract_type}</Badge>
                         </TableCell>
                         <TableCell className="text-xs text-muted-foreground">
-                          {new Date(emp.admission_date).toLocaleDateString("pt-BR")}
+                          {formatDateBR(emp.admission_date)}
                         </TableCell>
                         <TableCell className="font-semibold text-foreground">
                           {formatBRL(Number(emp.base_salary || 0))}
@@ -665,7 +665,7 @@ export default function RH() {
                         <div className="mt-1 flex items-center justify-between text-[11px] text-muted-foreground">
                           <span>Limite p/ gozo:</span>
                           <span className="font-medium text-foreground">
-                            {new Date(info.concessionLimit).toLocaleDateString("pt-BR")}
+                            {formatDateBR(info.concessionLimit)}
                           </span>
                         </div>
                         {info.isOverdue && (
@@ -728,8 +728,8 @@ export default function RH() {
                             {vac.employee_name || "Colaborador"}
                           </TableCell>
                           <TableCell className="text-xs">
-                            {new Date(vac.start_date).toLocaleDateString("pt-BR")} até{" "}
-                            {new Date(vac.end_date).toLocaleDateString("pt-BR")}
+                            {formatDateBR(vac.start_date)} até{" "}
+                            {formatDateBR(vac.end_date)}
                           </TableCell>
                           <TableCell>
                             <Badge variant="outline">{vac.days} dias</Badge>
@@ -932,7 +932,7 @@ export default function RH() {
                     occurrences.map((occ) => (
                       <TableRow key={occ.id}>
                         <TableCell className="text-xs font-semibold">
-                          {new Date(occ.date).toLocaleDateString("pt-BR")}
+                          {formatDateBR(occ.date)}
                         </TableCell>
                         <TableCell className="font-semibold">
                           {occ.employee_name || "Colaborador"}
