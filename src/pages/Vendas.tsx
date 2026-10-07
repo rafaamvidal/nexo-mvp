@@ -46,8 +46,19 @@ type SaleRow = {
 };
 
 type ClientRow = { id: string; name: string };
-type ProductRowLite = { id: string; name: string; price_sale: number | null };
-type SaleItemRow = { product_id: string; quantity: number };
+type ProductRowLite = {
+  id: string;
+  name: string;
+  price_sale: number | null;
+  price_cost: number | null;
+  unit: string | null;
+};
+type SaleItemRow = {
+  product_id: string | null;
+  quantity: number;
+  unit_price: number | null;
+  total: number | null;
+};
 
 const STOCK_MOVING_SALES_STATUSES = new Set(["Faturado", "Entregue"]);
 function isStockMovingSaleStatus(status: string) {
@@ -61,7 +72,10 @@ function toQtyMap(items: Array<{ product_id: string; quantity: number }>) {
 }
 
 async function fetchSaleItems(saleId: string): Promise<SaleItemRow[]> {
-  const { data, error } = await supabase.from("sale_items").select("product_id,quantity").eq("sale_id", saleId);
+  const { data, error } = await supabase
+    .from("sale_items")
+    .select("product_id,quantity,unit_price,total")
+    .eq("sale_id", saleId);
   if (error) throw error;
   return (data ?? []) as any;
 }
@@ -130,7 +144,7 @@ async function fetchClients(orgId?: string): Promise<ClientRow[]> {
 async function fetchProductsForSale(orgId?: string): Promise<ProductRowLite[]> {
   let query = supabase
     .from("products")
-    .select("id,name,price_sale")
+    .select("id,name,price_sale,price_cost,unit")
     .eq("status", "Ativo")
     .order("name", { ascending: true });
   if (orgId) query = query.eq("organization_id", orgId);
@@ -139,7 +153,7 @@ async function fetchProductsForSale(orgId?: string): Promise<ProductRowLite[]> {
   return (data ?? []) as any;
 }
 
-type SaleItemDraft = { product_id: string; quantity: number };
+type SaleItemDraft = { product_id: string; quantity: number; unit_price: number };
 
 export default function Vendas() {
   const qc = useQueryClient();
@@ -169,27 +183,28 @@ export default function Vendas() {
   const [clientId, setClientId] = React.useState<string>("");
   const [saleDate, setSaleDate] = React.useState<string>(() => new Date().toISOString().slice(0, 10));
   const [status, setStatus] = React.useState<string>("Pedido");
-  const [items, setItems] = React.useState<SaleItemDraft[]>([{ product_id: "", quantity: 1 }]);
+  const [items, setItems] = React.useState<SaleItemDraft[]>([{ product_id: "", quantity: 1, unit_price: 0 }]);
 
   const total = React.useMemo(() => {
-    const map = new Map((products ?? []).map((p) => [p.id, Number(p.price_sale ?? 0)]));
-    return items.reduce((acc, it) => acc + (map.get(it.product_id) ?? 0) * Number(it.quantity ?? 0), 0);
-  }, [items, products]);
+    return items.reduce((acc, it) => acc + Number(it.unit_price ?? 0) * Number(it.quantity ?? 0), 0);
+  }, [items]);
 
   const saveSale = useMutation({
     mutationFn: async () => {
       if (!clientId) throw new Error("Selecione um cliente");
       const validItems = items.filter((i) => i.product_id && Number(i.quantity) > 0);
       if (validItems.length === 0) throw new Error("Adicione ao menos 1 item");
+      if (validItems.some((i) => Number(i.unit_price) < 0)) {
+        throw new Error("O preço unitário vendido não pode ser negativo");
+      }
 
       if (originalStatus === "Cancelado") {
         throw new Error("Venda cancelada: itens travados (não é possível editar neste MVP)");
       }
 
-      const map = new Map((products ?? []).map((p) => [p.id, Number(p.price_sale ?? 0)]));
       const computeItemsPayload = (saleId: string, its: SaleItemDraft[]) =>
         its.map((it) => {
-          const unit = map.get(it.product_id) ?? 0;
+          const unit = Number(it.unit_price ?? 0);
           return {
             sale_id: saleId,
             product_id: it.product_id,
@@ -345,7 +360,7 @@ export default function Vendas() {
       setClientId("");
       setSaleDate(new Date().toISOString().slice(0, 10));
       setStatus("Pedido");
-      setItems([{ product_id: "", quantity: 1 }]);
+      setItems([{ product_id: "", quantity: 1, unit_price: 0 }]);
       setOriginalItems([]);
       setOriginalStatus("Pedido");
       await qc.invalidateQueries({ queryKey: ["sales"] });
@@ -380,7 +395,7 @@ export default function Vendas() {
     setClientId("");
     setSaleDate(new Date().toISOString().slice(0, 10));
     setStatus("Pedido");
-    setItems([{ product_id: "", quantity: 1 }]);
+    setItems([{ product_id: "", quantity: 1, unit_price: 0 }]);
     setOpen(true);
   };
 
@@ -393,10 +408,18 @@ export default function Vendas() {
       setOriginalStatus(sale.status ?? "Pedido");
 
       const its = await fetchSaleItems(sale.id);
-      const draft = its
+      const prodMap = new Map((products ?? []).map((p) => [p.id, p]));
+      const draft: SaleItemDraft[] = its
         .filter((x) => x.product_id)
-        .map((x) => ({ product_id: x.product_id, quantity: Number(x.quantity) }));
-      setItems(draft.length ? draft : [{ product_id: "", quantity: 1 }]);
+        .map((x) => {
+          const fallbackPrice = Number(prodMap.get(x.product_id!)?.price_sale ?? 0);
+          return {
+            product_id: x.product_id!,
+            quantity: Number(x.quantity),
+            unit_price: x.unit_price != null ? Number(x.unit_price) : fallbackPrice,
+          };
+        });
+      setItems(draft.length ? draft : [{ product_id: "", quantity: 1, unit_price: 0 }]);
       setOriginalItems(draft);
       setOpen(true);
     } catch (e: any) {
@@ -464,7 +487,7 @@ export default function Vendas() {
                   Nova Venda
                 </Button>
               </SheetTrigger>
-            <SheetContent side="right" className="w-full sm:max-w-xl">
+            <SheetContent side="right" className="w-full sm:max-w-2xl overflow-y-auto">
               <SheetHeader>
                 <SheetTitle>{editingSaleId ? "Editar Venda" : "Nova Venda"}</SheetTitle>
               </SheetHeader>
@@ -517,63 +540,147 @@ export default function Vendas() {
                 </p>
 
                 <div className="grid gap-2">
-                  <Label>Itens</Label>
+                  <div className="flex items-center justify-between">
+                    <Label>Itens da Venda</Label>
+                    <span className="text-xs text-muted-foreground">
+                      Consulte o custo e ajuste o preço vendido
+                    </span>
+                  </div>
                   {status === "Cancelado" && (
                     <p className="text-xs text-muted-foreground">Venda cancelada: itens travados.</p>
                   )}
-                  <div className="grid gap-2">
-                    {items.map((it, idx) => (
-                      <div key={idx} className="grid grid-cols-12 gap-2">
-                        <div className="col-span-8">
-                          <Select
-                            value={it.product_id}
-                            onValueChange={(v) =>
-                              setItems((cur) => cur.map((x, i) => (i === idx ? { ...x, product_id: v } : x)))
-                            }
-                            disabled={status === "Cancelado"}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Produto…" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {(products ?? []).map((p) => (
-                                <SelectItem key={p.id} value={p.id}>
-                                  {p.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                  <div className="grid gap-3">
+                    {items.map((it, idx) => {
+                      const prod = (products ?? []).find((p) => p.id === it.product_id);
+                      const costPrice = Number(prod?.price_cost ?? 0);
+                      const unitSalePrice = Number(it.unit_price ?? 0);
+                      const subtotal = Number(it.quantity ?? 0) * unitSalePrice;
+                      const hasCost = costPrice > 0;
+                      const isBelowCost = hasCost && unitSalePrice > 0 && unitSalePrice < costPrice;
+
+                      return (
+                        <div
+                          key={idx}
+                          className="rounded-lg border border-border/50 bg-muted/15 p-3 space-y-2.5 transition-colors"
+                        >
+                          {/* Linha superior: Produto e botão remover */}
+                          <div className="flex items-center gap-2">
+                            <div className="flex-1">
+                              <Select
+                                value={it.product_id}
+                                onValueChange={(v) => {
+                                  const selectedProd = (products ?? []).find((p) => p.id === v);
+                                  setItems((cur) =>
+                                    cur.map((x, i) =>
+                                      i === idx
+                                        ? {
+                                            ...x,
+                                            product_id: v,
+                                            unit_price: Number(selectedProd?.price_sale ?? 0),
+                                          }
+                                        : x
+                                    )
+                                  );
+                                }}
+                                disabled={status === "Cancelado"}
+                              >
+                                <SelectTrigger className="w-full">
+                                  <SelectValue placeholder="Selecione o produto…" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {(products ?? []).map((p) => (
+                                    <SelectItem key={p.id} value={p.id}>
+                                      {p.name} {p.unit ? `(${p.unit})` : ""}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="text-muted-foreground hover:text-destructive shrink-0"
+                              onClick={() => setItems((cur) => cur.filter((_, i) => i !== idx))}
+                              disabled={items.length === 1 || status === "Cancelado"}
+                              aria-label="Remover item"
+                              title="Remover item"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+
+                          {/* Linha inferior: Quantidade, Custo (Informativo), Valor Vendido (Editável) e Subtotal */}
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 items-end pt-1">
+                            <div className="grid gap-1">
+                              <Label className="text-xs text-muted-foreground">Qtd</Label>
+                              <Input
+                                type="number"
+                                min={1}
+                                step={1}
+                                value={it.quantity}
+                                onChange={(e) =>
+                                  setItems((cur) =>
+                                    cur.map((x, i) =>
+                                      i === idx ? { ...x, quantity: Number(e.target.value) } : x
+                                    )
+                                  )
+                                }
+                                disabled={status === "Cancelado"}
+                              />
+                            </div>
+
+                            <div className="grid gap-1">
+                              <Label className="text-xs text-muted-foreground">Custo Unit.</Label>
+                              <div className="h-9 px-3 rounded-md border border-input bg-muted/40 flex items-center text-xs font-medium text-muted-foreground">
+                                {it.product_id ? formatBRL(costPrice) : "—"}
+                              </div>
+                            </div>
+
+                            <div className="grid gap-1">
+                              <Label className="text-xs font-semibold text-foreground">Valor Vendido</Label>
+                              <Input
+                                type="number"
+                                min={0}
+                                step={0.01}
+                                value={it.unit_price}
+                                onChange={(e) =>
+                                  setItems((cur) =>
+                                    cur.map((x, i) =>
+                                      i === idx ? { ...x, unit_price: Number(e.target.value) } : x
+                                    )
+                                  )
+                                }
+                                disabled={status === "Cancelado"}
+                                className={isBelowCost ? "border-amber-500 focus-visible:ring-amber-500 font-semibold" : "font-semibold"}
+                              />
+                            </div>
+
+                            <div className="grid gap-1">
+                              <Label className="text-xs text-muted-foreground">Subtotal</Label>
+                              <div className="h-9 px-3 rounded-md border border-border/40 bg-background/80 flex items-center justify-end text-xs font-bold">
+                                {formatBRL(subtotal)}
+                              </div>
+                            </div>
+                          </div>
+
+                          {isBelowCost && (
+                            <div className="text-[11px] text-amber-600 dark:text-amber-400 font-medium flex items-center gap-1 pt-0.5">
+                              ⚠️ Atenção: Valor vendido ({formatBRL(unitSalePrice)}) está abaixo do custo unitário ({formatBRL(costPrice)}).
+                            </div>
+                          )}
                         </div>
-                        <div className="col-span-3">
-                          <Input
-                            type="number"
-                            min={1}
-                            value={it.quantity}
-                            onChange={(e) =>
-                              setItems((cur) =>
-                                cur.map((x, i) => (i === idx ? { ...x, quantity: Number(e.target.value) } : x)),
-                              )
-                            }
-                            disabled={status === "Cancelado"}
-                          />
-                        </div>
-                        <div className="col-span-1 flex items-center justify-end">
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => setItems((cur) => cur.filter((_, i) => i !== idx))}
-                            disabled={items.length === 1}
-                            aria-label="Remover item"
-                          >
-                            ×
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                   <div>
-                    <Button type="button" variant="outline" onClick={() => setItems((cur) => [...cur, { product_id: "", quantity: 1 }])}>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setItems((cur) => [...cur, { product_id: "", quantity: 1, unit_price: 0 }])}
+                      disabled={status === "Cancelado"}
+                    >
                       Adicionar item
                     </Button>
                   </div>

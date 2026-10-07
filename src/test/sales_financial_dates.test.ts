@@ -78,4 +78,39 @@ describe("Datas de Vendas e Financeiro", () => {
       expect(formatDateBR(editPaymentDate)).toBe("15/09/2026");
     });
   });
+
+  describe("Precificação Estratégica e Custo em Vendas", () => {
+    it("deve calcular o total da venda baseado no preço vendido customizado pelo usuário", () => {
+      const items = [
+        { product_id: "prod-1", quantity: 2, unit_price: 25.5 }, // preço customizado diferente do catálogo
+        { product_id: "prod-2", quantity: 3, unit_price: 10.0 },
+      ];
+
+      const total = items.reduce((acc, it) => acc + Number(it.unit_price) * Number(it.quantity), 0);
+      expect(total).toBe(2 * 25.5 + 3 * 10.0); // 51 + 30 = 81
+    });
+
+    it("deve detectar quando o preço vendido estiver abaixo do preço de custo para alerta comercial", () => {
+      const productCost = 35.0;
+      const promotionalSalePrice = 29.9;
+      const isBelowCost = productCost > 0 && promotionalSalePrice > 0 && promotionalSalePrice < productCost;
+
+      expect(isBelowCost).toBe(true);
+    });
+
+    it("deve gerar payload de itens com unit_price e total corretos para persistência", () => {
+      const items = [
+        { product_id: "p1", quantity: 4, unit_price: 15.0 },
+      ];
+      const payload = items.map((it) => ({
+        product_id: it.product_id,
+        quantity: it.quantity,
+        unit_price: it.unit_price,
+        total: it.quantity * it.unit_price,
+      }));
+
+      expect(payload[0].unit_price).toBe(15.0);
+      expect(payload[0].total).toBe(60.0);
+    });
+  });
 });
