@@ -350,7 +350,7 @@ export default function Produtos() {
                 </span>
                 <span className="font-semibold">{products.length} itens</span>
               </div>
-              <Table containerClassName="max-h-[460px] md:max-h-[500px] lg:max-h-[calc(100vh-320px)] overflow-y-auto" className="min-w-[720px] w-full">
+              <Table containerClassName="lg:max-h-[calc(100dvh-320px)]" className="min-w-[720px] w-full">
                 <TableHeader className="sticky top-0 z-10 bg-card/95 backdrop-blur shadow-sm [&_th]:bg-card/95 [&_th]:backdrop-blur">
                   <TableRow>
                     <TableHead className="py-2.5 px-3">Nome</TableHead>

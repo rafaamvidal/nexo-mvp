@@ -59,9 +59,11 @@ export function StockEditDialog({ open, onOpenChange, product }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[360px]">
+      <DialogContent className="w-[calc(100%-2rem)] max-h-[90dvh] overflow-y-auto rounded-lg p-5 sm:max-w-[360px] sm:p-6">
         <DialogHeader>
-          <DialogTitle className="truncate">Editar: {product.name}</DialogTitle>
+          <DialogTitle className="truncate pr-6 text-left leading-snug" title={product.name}>
+            Editar: {product.name}
+          </DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
@@ -69,21 +71,23 @@ export function StockEditDialog({ open, onOpenChange, product }: Props) {
             <Input
               id="stock-qty"
               type="number"
+              inputMode="decimal"
               min={0}
               step="any"
               value={qty}
               onChange={(e) => setQty(e.target.value)}
+              className="h-11 text-base sm:h-10 sm:text-sm"
               autoFocus
             />
             <p className="text-xs text-muted-foreground">
               Atual: {product.current_stock} {product.unit}
             </p>
           </div>
-          <DialogFooter>
-            <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button type="button" variant="ghost" className="h-11 sm:h-10" onClick={() => onOpenChange(false)}>
               Cancelar
             </Button>
-            <Button type="submit" disabled={mutation.isPending}>
+            <Button type="submit" className="h-11 sm:h-10" disabled={mutation.isPending}>
               {mutation.isPending ? "Salvando…" : "Salvar"}
             </Button>
           </DialogFooter>

@@ -159,8 +159,14 @@ export default function Estoque() {
                 </Card>
               )}
 
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {isLoading && Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-32 rounded-xl" />)}
+
+                {!isLoading && !error && filtered.length === 0 && (
+                  <Card className="glass col-span-full p-6 text-center">
+                    <p className="text-sm text-muted-foreground">Nenhum produto encontrado.</p>
+                  </Card>
+                )}
 
                 {!isLoading && !error && filtered.map((p) => {
                   const resolved = resolveProductClassification({
@@ -172,22 +178,24 @@ export default function Estoque() {
                   const minVal = Number(p.min_stock ?? 0);
                   const low = !isFinished && minVal > 0 && Number(p.current_stock) < minVal;
                   return (
-                    <Card key={p.id} className="glass border-border/60 transition-shadow hover:shadow-sm">
-                      <CardHeader className="pb-2">
-                        <CardTitle className="flex items-center justify-between gap-3 text-base">
-                          <span className="truncate">{p.name}</span>
+                    // min-w-0 impede que o nome (nowrap) alargue o card além da tela no mobile
+                    <Card key={p.id} className="glass min-w-0 border-border/60 transition-shadow hover:shadow-sm">
+                      <CardHeader className="p-4 pb-2 sm:p-6 sm:pb-2">
+                        <CardTitle className="flex min-w-0 items-center justify-between gap-2 text-base">
+                          <span className="min-w-0 flex-1 truncate" title={p.name}>{p.name}</span>
                           <Button
                             type="button"
-                            variant="ghost"
+                            variant="outline"
                             size="icon"
-                            className="h-7 w-7 shrink-0"
+                            className="h-9 w-9 shrink-0 sm:h-8 sm:w-8"
                             aria-label="Editar estoque"
+                            title="Editar estoque"
                             onClick={() => setEditProduct(p)}
                           >
-                            <Pencil className="h-3.5 w-3.5" />
+                            <Pencil className="h-4 w-4 sm:h-3.5 sm:w-3.5" />
                           </Button>
                         </CardTitle>
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
                           <span className={"text-sm font-bold " + (low ? "text-destructive" : "")}>
                             {p.current_stock}
                           </span>
@@ -195,8 +203,8 @@ export default function Estoque() {
                           {low && <Badge variant="destructive">Estoque Baixo</Badge>}
                         </div>
                       </CardHeader>
-                      <CardContent className="flex items-center justify-between gap-3">
-                        <div className="min-w-0">
+                      <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4 pt-0 sm:p-6 sm:pt-0">
+                        <div className="min-w-0 flex-1">
                           <p className="truncate text-xs text-muted-foreground">{p.category ?? "Sem categoria"}</p>
                           {isFinished ? (
                             <p className="mt-1 text-xs text-muted-foreground font-medium">Fabricação própria</p>
