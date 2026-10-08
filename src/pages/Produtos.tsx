@@ -344,7 +344,13 @@ export default function Produtos() {
 
           {!isLoading && !error && products.length > 0 && (
             <Card className="glass overflow-hidden rounded-xl border border-border/60">
-              <Table containerClassName="max-h-[460px] md:max-h-[500px] lg:max-h-[calc(100vh-320px)] overflow-y-auto">
+              <div className="flex sm:hidden items-center justify-between px-3 py-2 bg-muted/20 border-b border-border/40 text-[11px] text-muted-foreground">
+                <span className="flex items-center gap-1 font-medium">
+                  ↔️ Arraste para o lado para ver preços e ações
+                </span>
+                <span className="font-semibold">{products.length} itens</span>
+              </div>
+              <Table containerClassName="max-h-[460px] md:max-h-[500px] lg:max-h-[calc(100vh-320px)] overflow-y-auto" className="min-w-[720px] w-full">
                 <TableHeader className="sticky top-0 z-10 bg-card/95 backdrop-blur shadow-sm [&_th]:bg-card/95 [&_th]:backdrop-blur">
                   <TableRow>
                     <TableHead className="py-2.5 px-3">Nome</TableHead>

@@ -574,17 +574,22 @@ export default function Cadastros() {
 
                 {!loadingClients && !errClients && (
                   <Card className="glass mt-4 overflow-hidden rounded-xl border border-border/60">
-                    <ScrollArea className="max-h-[70vh]">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Nome</TableHead>
-                            <TableHead>CPF/CNPJ</TableHead>
-                            <TableHead>Contato & WhatsApp</TableHead>
-                            <TableHead>Localização</TableHead>
-                            <TableHead className="text-right">Ações</TableHead>
-                          </TableRow>
-                        </TableHeader>
+                    <div className="flex sm:hidden items-center justify-between px-3 py-2 bg-muted/20 border-b border-border/40 text-[11px] text-muted-foreground">
+                      <span className="flex items-center gap-1 font-medium">
+                        ↔️ Arraste para o lado para ver contatos e ações
+                      </span>
+                      <span className="font-semibold">{filteredClients.length} clientes</span>
+                    </div>
+                    <Table containerClassName="max-h-[70vh]" className="min-w-[700px] w-full">
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Nome</TableHead>
+                          <TableHead>CPF/CNPJ</TableHead>
+                          <TableHead>Contato & WhatsApp</TableHead>
+                          <TableHead>Localização</TableHead>
+                          <TableHead className="text-right">Ações</TableHead>
+                        </TableRow>
+                      </TableHeader>
                         <TableBody>
                           {filteredClients.length === 0 ? (
                             <TableRow>
@@ -680,7 +685,6 @@ export default function Cadastros() {
                           )}
                         </TableBody>
                       </Table>
-                    </ScrollArea>
                   </Card>
                 )}
               </TabsContent>
@@ -721,17 +725,22 @@ export default function Cadastros() {
 
                 {!loadingSuppliers && !errSuppliers && (
                   <Card className="glass mt-4 overflow-hidden rounded-xl border border-border/60">
-                    <ScrollArea className="max-h-[70vh]">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Nome / Fornecedor</TableHead>
-                            <TableHead>CNPJ/CPF</TableHead>
-                            <TableHead>Contato & WhatsApp</TableHead>
-                            <TableHead>Localização</TableHead>
-                            <TableHead className="text-right">Ações</TableHead>
-                          </TableRow>
-                        </TableHeader>
+                    <div className="flex sm:hidden items-center justify-between px-3 py-2 bg-muted/20 border-b border-border/40 text-[11px] text-muted-foreground">
+                      <span className="flex items-center gap-1 font-medium">
+                        ↔️ Arraste para o lado para ver produtos e contatos
+                      </span>
+                      <span className="font-semibold">{filteredSuppliers.length} fornecedores</span>
+                    </div>
+                    <Table containerClassName="max-h-[70vh]" className="min-w-[720px] w-full">
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Nome / Fornecedor</TableHead>
+                          <TableHead>CNPJ/CPF</TableHead>
+                          <TableHead>Contato & WhatsApp</TableHead>
+                          <TableHead>Localização</TableHead>
+                          <TableHead className="text-right">Ações</TableHead>
+                        </TableRow>
+                      </TableHeader>
                         <TableBody>
                           {filteredSuppliers.length === 0 ? (
                             <TableRow>
@@ -848,7 +857,6 @@ export default function Cadastros() {
                           )}
                         </TableBody>
                       </Table>
-                    </ScrollArea>
                   </Card>
                 )}
               </TabsContent>

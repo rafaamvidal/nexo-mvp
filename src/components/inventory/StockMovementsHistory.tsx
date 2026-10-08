@@ -231,9 +231,14 @@ export function StockMovementsHistory() {
 
       {!isLoading && !error && (
         <Card className="glass overflow-hidden rounded-xl border border-border/60">
-          <ScrollArea className="max-h-[65vh]">
-            <Table>
-              <TableHeader>
+          <div className="flex sm:hidden items-center justify-between px-3 py-2 bg-muted/20 border-b border-border/40 text-[11px] text-muted-foreground">
+            <span className="flex items-center gap-1 font-medium">
+              ↔️ Arraste para o lado para ver motivo e detalhes
+            </span>
+            <span className="font-semibold">{filtered.length} movimentações</span>
+          </div>
+          <Table containerClassName="max-h-[65vh]" className="min-w-[680px] w-full">
+            <TableHeader>
                 <TableRow>
                   <TableHead className="w-[150px]">Data / Hora</TableHead>
                   <TableHead>Produto</TableHead>
@@ -290,7 +295,6 @@ export function StockMovementsHistory() {
                 )}
               </TableBody>
             </Table>
-          </ScrollArea>
         </Card>
       )}
     </div>

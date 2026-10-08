@@ -550,112 +550,116 @@ export default function Producao() {
 
           {!isLoading && !error && (filtered ?? []).length > 0 && (
             <Card className="glass overflow-hidden rounded-xl border border-border/60">
-              <ScrollArea className="max-h-[70vh]">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Data</TableHead>
-                      <TableHead>Produto</TableHead>
-                      <TableHead className="text-right">Qtd</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead className="text-right">Ações</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {(filtered ?? []).map((o) => (
-                      <TableRow key={o.id} className="odd:bg-muted/20">
-                        <TableCell className="text-sm text-muted-foreground">
-                          {new Date(o.created_at ?? new Date().toISOString()).toLocaleDateString("pt-BR")}
-                        </TableCell>
-                        <TableCell className="font-semibold">{o.products?.name ?? "—"}</TableCell>
-                        <TableCell className="text-right font-bold">{Number(o.quantity ?? 0)}</TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            {statusBadge(o.status)}
-                            <Select
-                              value={o.status ?? "Planejada"}
-                              onValueChange={(v) => {
-                                if (v === "Finalizada") {
-                                  setFinalizeTarget(o);
-                                  setFinalizeSkipBom(false);
-                                } else {
-                                  updateStatus.mutate({ id: o.id, next: v });
-                                }
-                              }}
-                              disabled={(o.status ?? "") === "Finalizada" || (o.status ?? "") === "Cancelada" || updateStatus.isPending}
-                            >
-                              <SelectTrigger className="h-8 w-[160px]">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="Planejada">Planejada</SelectItem>
-                                <SelectItem value="Em Produção">Em Produção</SelectItem>
-                                <SelectItem value="Finalizada">Finalizada</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="inline-flex items-center gap-2">
-                            <Button type="button" variant="outline" size="icon" aria-label="Editar" onClick={() => openEditDialog(o)}>
-                              <Pencil className="h-4 w-4" />
-                            </Button>
-
-                            <AlertDialog>
-                              <AlertDialogTrigger asChild>
-                                <Button type="button" variant="outline" size="icon" aria-label="Excluir">
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </AlertDialogTrigger>
-                              <AlertDialogContent>
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle>Excluir ordem?</AlertDialogTitle>
-                                  <AlertDialogDescription>
-                                    Esta ação não pode ser desfeita. Se houver vínculos, a exclusão poderá ser bloqueada.
-                                  </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                  <AlertDialogAction onClick={() => deleteMO.mutate(o.id)} disabled={deleteMO.isPending}>
-                                    Excluir
-                                  </AlertDialogAction>
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                            </AlertDialog>
-
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="outline"
-                              className="gap-2"
-                              onClick={() => {
+              <div className="flex sm:hidden items-center justify-between px-3 py-2 bg-muted/20 border-b border-border/40 text-[11px] text-muted-foreground">
+                <span className="flex items-center gap-1 font-medium">
+                  ↔️ Arraste para o lado para alterar status e ações
+                </span>
+                <span className="font-semibold">{(filtered ?? []).length} ordens</span>
+              </div>
+              <Table containerClassName="max-h-[70vh]" className="min-w-[820px] w-full">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Data</TableHead>
+                    <TableHead>Produto</TableHead>
+                    <TableHead className="text-right">Qtd</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Ações</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {(filtered ?? []).map((o) => (
+                    <TableRow key={o.id} className="odd:bg-muted/20">
+                      <TableCell className="text-sm text-muted-foreground">
+                        {new Date(o.created_at ?? new Date().toISOString()).toLocaleDateString("pt-BR")}
+                      </TableCell>
+                      <TableCell className="font-semibold">{o.products?.name ?? "—"}</TableCell>
+                      <TableCell className="text-right font-bold">{Number(o.quantity ?? 0)}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          {statusBadge(o.status)}
+                          <Select
+                            value={o.status ?? "Planejada"}
+                            onValueChange={(v) => {
+                              if (v === "Finalizada") {
                                 setFinalizeTarget(o);
                                 setFinalizeSkipBom(false);
-                              }}
-                              disabled={finalizeMO.isPending || (o.status ?? "") === "Finalizada" || (o.status ?? "") === "Cancelada"}
-                            >
-                              <CheckCircle2 className="h-4 w-4" />
-                              Finalizar
-                            </Button>
+                              } else {
+                                updateStatus.mutate({ id: o.id, next: v });
+                              }
+                            }}
+                            disabled={(o.status ?? "") === "Finalizada" || (o.status ?? "") === "Cancelada" || updateStatus.isPending}
+                          >
+                            <SelectTrigger className="h-8 w-[160px]">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="Planejada">Planejada</SelectItem>
+                              <SelectItem value="Em Produção">Em Produção</SelectItem>
+                              <SelectItem value="Finalizada">Finalizada</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="inline-flex items-center gap-2">
+                          <Button type="button" variant="outline" size="icon" aria-label="Editar" onClick={() => openEditDialog(o)}>
+                            <Pencil className="h-4 w-4" />
+                          </Button>
 
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="outline"
-                              className="gap-2"
-                              onClick={() => cancelMO.mutate(o)}
-                              disabled={cancelMO.isPending || (o.status ?? "") === "Cancelada"}
-                            >
-                              <XCircle className="h-4 w-4" />
-                              Cancelar
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </ScrollArea>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button type="button" variant="outline" size="icon" aria-label="Excluir">
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Excluir ordem?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Esta ação não pode ser desfeita. Se houver vínculos, a exclusão poderá ser bloqueada.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                <AlertDialogAction onClick={() => deleteMO.mutate(o.id)} disabled={deleteMO.isPending}>
+                                  Excluir
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="gap-2"
+                            onClick={() => {
+                              setFinalizeTarget(o);
+                              setFinalizeSkipBom(false);
+                            }}
+                            disabled={finalizeMO.isPending || (o.status ?? "") === "Finalizada" || (o.status ?? "") === "Cancelada"}
+                          >
+                            <CheckCircle2 className="h-4 w-4" />
+                            Finalizar
+                          </Button>
+
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="gap-2"
+                            onClick={() => cancelMO.mutate(o)}
+                            disabled={cancelMO.isPending || (o.status ?? "") === "Cancelada"}
+                          >
+                            <XCircle className="h-4 w-4" />
+                            Cancelar
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             </Card>
           )}
         </div>

@@ -996,9 +996,14 @@ export default function Compras() {
 
           {!isLoading && !error && (filtered ?? []).length > 0 && (
             <Card className="glass overflow-hidden rounded-xl border border-border/60">
-              <ScrollArea className="max-h-[70vh]">
-                <Table>
-                  <TableHeader>
+              <div className="flex sm:hidden items-center justify-between px-3 py-2 bg-muted/20 border-b border-border/40 text-[11px] text-muted-foreground">
+                <span className="flex items-center gap-1 font-medium">
+                  ↔️ Arraste para o lado para ver ações e receber
+                </span>
+                <span className="font-semibold">{(filtered ?? []).length} pedidos</span>
+              </div>
+              <Table containerClassName="max-h-[70vh]" className="min-w-[720px] w-full">
+                <TableHeader>
                     <TableRow>
                       <TableHead>Data</TableHead>
                       <TableHead>Fornecedor</TableHead>
@@ -1073,7 +1078,6 @@ export default function Compras() {
                     ))}
                   </TableBody>
                 </Table>
-              </ScrollArea>
             </Card>
           )}
         </div>

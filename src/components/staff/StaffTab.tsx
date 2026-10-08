@@ -319,7 +319,13 @@ export function StaffTab() {
 
       {!loading && !error && (
         <Card className="glass overflow-hidden rounded-xl border border-border/60">
-          <Table>
+          <div className="flex sm:hidden items-center justify-between px-3 py-1.5 bg-muted/20 border-b border-border/40 text-[11px] text-muted-foreground">
+            <span className="flex items-center gap-1 font-medium">
+              ↔️ Arraste para o lado para ver ações
+            </span>
+            <span className="font-semibold">{(allowlistUsers ?? []).length} usuários</span>
+          </div>
+          <Table className="min-w-[620px] w-full">
             <TableHeader>
               <TableRow>
                 <TableHead>Nome</TableHead>

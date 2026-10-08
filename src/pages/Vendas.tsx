@@ -793,84 +793,88 @@ export default function Vendas() {
 
           {!isLoading && !error && (data ?? []).length > 0 && (
             <Card className="glass overflow-hidden rounded-xl border border-border/60">
-              <ScrollArea className="max-h-[70vh]">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Data</TableHead>
-                      <TableHead>Cliente</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead className="text-right">Total</TableHead>
-                      <TableHead className="text-right">Ações</TableHead>
+              <div className="flex sm:hidden items-center justify-between px-3 py-2 bg-muted/20 border-b border-border/40 text-[11px] text-muted-foreground">
+                <span className="flex items-center gap-1 font-medium">
+                  ↔️ Arraste para o lado para ver ações e valores
+                </span>
+                <span className="font-semibold">{(filtered ?? []).length} vendas</span>
+              </div>
+              <Table containerClassName="max-h-[70vh]" className="min-w-[680px] w-full">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Data</TableHead>
+                    <TableHead>Cliente</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Total</TableHead>
+                    <TableHead className="text-right">Ações</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {(filtered ?? []).map((s) => (
+                    <TableRow key={s.id} className="odd:bg-muted/20">
+                      <TableCell className="text-sm text-muted-foreground">
+                        {formatDateBR(s.created_at)}
+                      </TableCell>
+                      <TableCell className="font-semibold">{s.clients?.name ?? "—"}</TableCell>
+                      <TableCell>
+                        <div className="flex flex-col gap-1 items-start">
+                          <span>{s.status ?? "—"}</span>
+                          {isSkipStockSale(s.observations) && (
+                            <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-600 border-amber-500/30">
+                              Sem baixa estoque
+                            </Badge>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right font-bold">{formatBRL(Number(s.total_amount ?? 0))}</TableCell>
+                      <TableCell className="text-right">
+                        <div className="inline-flex items-center gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            aria-label="Imprimir comprovante"
+                            title="Imprimir / Visualizar Comprovante"
+                            onClick={() => setPrintSaleId(s.id)}
+                          >
+                            <Printer className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            aria-label="Editar"
+                            onClick={() => void openForEdit(s)}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button type="button" variant="outline" size="icon" aria-label="Excluir">
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Excluir venda?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Esta ação não pode ser desfeita. Se a venda tiver vínculos, a exclusão poderá ser bloqueada.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                <AlertDialogAction onClick={() => deleteSale.mutate(s.id)} disabled={deleteSale.isPending}>
+                                  Excluir
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </div>
+                      </TableCell>
                     </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {(filtered ?? []).map((s) => (
-                      <TableRow key={s.id} className="odd:bg-muted/20">
-                        <TableCell className="text-sm text-muted-foreground">
-                          {formatDateBR(s.created_at)}
-                        </TableCell>
-                        <TableCell className="font-semibold">{s.clients?.name ?? "—"}</TableCell>
-                        <TableCell>
-                          <div className="flex flex-col gap-1 items-start">
-                            <span>{s.status ?? "—"}</span>
-                            {isSkipStockSale(s.observations) && (
-                              <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-600 border-amber-500/30">
-                                Sem baixa estoque
-                              </Badge>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right font-bold">{formatBRL(Number(s.total_amount ?? 0))}</TableCell>
-                        <TableCell className="text-right">
-                          <div className="inline-flex items-center gap-2">
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="icon"
-                              aria-label="Imprimir comprovante"
-                              title="Imprimir / Visualizar Comprovante"
-                              onClick={() => setPrintSaleId(s.id)}
-                            >
-                              <Printer className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="icon"
-                              aria-label="Editar"
-                              onClick={() => void openForEdit(s)}
-                            >
-                              <Pencil className="h-4 w-4" />
-                            </Button>
-                            <AlertDialog>
-                              <AlertDialogTrigger asChild>
-                                <Button type="button" variant="outline" size="icon" aria-label="Excluir">
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </AlertDialogTrigger>
-                              <AlertDialogContent>
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle>Excluir venda?</AlertDialogTitle>
-                                  <AlertDialogDescription>
-                                    Esta ação não pode ser desfeita. Se a venda tiver vínculos, a exclusão poderá ser bloqueada.
-                                  </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                  <AlertDialogAction onClick={() => deleteSale.mutate(s.id)} disabled={deleteSale.isPending}>
-                                    Excluir
-                                  </AlertDialogAction>
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                            </AlertDialog>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </ScrollArea>
+                  ))}
+                </TableBody>
+              </Table>
             </Card>
           )}
         </div>

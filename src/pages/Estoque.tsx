@@ -312,8 +312,14 @@ export default function Estoque() {
                       </p>
                     </div>
                   ) : (
-                    <ScrollArea className="max-h-[460px]">
-                      <Table>
+                    <>
+                      <div className="flex sm:hidden items-center justify-between px-3 py-2 bg-muted/20 border-b border-border/40 text-[11px] text-muted-foreground">
+                        <span className="flex items-center gap-1 font-medium">
+                          ↔️ Arraste para o lado para ver sugestões e custos
+                        </span>
+                        <span className="font-semibold">{criticalItems.length} itens</span>
+                      </div>
+                      <Table containerClassName="max-h-[460px]" className="min-w-[780px] w-full">
                         <TableHeader>
                           <TableRow>
                             <TableHead>Produto</TableHead>
@@ -389,7 +395,7 @@ export default function Estoque() {
                           })}
                         </TableBody>
                       </Table>
-                    </ScrollArea>
+                    </>
                   )}
                 </CardContent>
               </Card>
