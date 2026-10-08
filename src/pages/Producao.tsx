@@ -10,6 +10,7 @@ import { exportToCsv } from "@/lib/exportCsv";
 import { getProductBom } from "@/lib/bom";
 import { BomManagerDialog } from "@/components/production/BomManagerDialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -98,6 +99,11 @@ export default function Producao() {
   const [open, setOpen] = React.useState(false);
   const [productId, setProductId] = React.useState<string>("");
   const [quantity, setQuantity] = React.useState<number>(1);
+  const [createDirectFinalized, setCreateDirectFinalized] = React.useState<boolean>(false);
+  const [createSkipBom, setCreateSkipBom] = React.useState<boolean>(false);
+
+  const [finalizeTarget, setFinalizeTarget] = React.useState<ManufacturingOrderRow | null>(null);
+  const [finalizeSkipBom, setFinalizeSkipBom] = React.useState<boolean>(false);
 
   const [editOpen, setEditOpen] = React.useState(false);
   const [editing, setEditing] = React.useState<ManufacturingOrderRow | null>(null);
@@ -136,23 +142,75 @@ export default function Producao() {
     mutationFn: async () => {
       if (!productId) throw new Error("Selecione o produto final");
       if (!quantity || Number(quantity) <= 0) throw new Error("Quantidade inválida");
-      const { error } = await supabase.from("manufacturing_orders").insert({
-        product_id: productId,
-        quantity: Number(quantity),
-        status: "Planejada",
-        start_date: null,
-        end_date: null,
-        created_at: new Date().toISOString(),
-        organization_id: currentOrg?.id,
-      } as any);
+
+      const today = new Date().toISOString().slice(0, 10);
+      const isFin = createDirectFinalized;
+      const orderQty = Number(quantity);
+
+      const { data: newMo, error } = await supabase
+        .from("manufacturing_orders")
+        .insert({
+          product_id: productId,
+          quantity: orderQty,
+          status: isFin ? "Finalizada" : "Planejada",
+          start_date: isFin ? today : null,
+          end_date: isFin ? today : null,
+          created_at: new Date().toISOString(),
+          organization_id: currentOrg?.id,
+        } as any)
+        .select("id,code")
+        .single();
       if (error) throw error;
+
+      if (isFin && newMo) {
+        const codeOrId = (newMo as any).code ?? (newMo as any).id.slice(0, 8);
+
+        // 1. Entrada no produto final fabricado
+        const { error: mvErr } = await (supabase as any).rpc("apply_movement", {
+          p_product_id: productId,
+          p_type: "Entrada",
+          p_quantity: orderQty,
+          p_reason: createSkipBom
+            ? `Produção Concluída (Sem baixa de insumos) (OF #${codeOrId})`
+            : `Produção Finalizada (OF #${codeOrId})`,
+          p_reference_id: (newMo as any).id,
+        });
+        if (mvErr) throw mvErr;
+
+        // 2. Saída dos insumos (se não marcado para pular)
+        if (!createSkipBom) {
+          const bom = await getProductBom(productId);
+          for (const item of bom) {
+            if (item.rawMaterialId && item.quantityPerUnit > 0) {
+              const consumedQty = Number(item.quantityPerUnit) * orderQty;
+              await (supabase as any).rpc("apply_movement", {
+                p_product_id: item.rawMaterialId,
+                p_type: "Saída",
+                p_quantity: consumedQty,
+                p_reason: `Consumo Matéria-Prima (OF #${codeOrId})`,
+                p_reference_id: (newMo as any).id,
+              });
+            }
+          }
+        }
+      }
     },
     onSuccess: async () => {
-      toast.success("Ordem criada");
+      toast.success(
+        createDirectFinalized
+          ? createSkipBom
+            ? "Produção finalizada! Produto adicionado ao estoque sem descontar insumos."
+            : "Produção finalizada e estoque atualizado com sucesso!"
+          : "Ordem de fabricação planejada com sucesso"
+      );
       setOpen(false);
       setProductId("");
       setQuantity(1);
+      setCreateDirectFinalized(false);
+      setCreateSkipBom(false);
       await qc.invalidateQueries({ queryKey: ["manufacturing_orders"] });
+      await qc.invalidateQueries({ queryKey: ["products"] });
+      await qc.invalidateQueries({ queryKey: ["stock_movements"] });
     },
     onError: (e: any) => toast.error(e?.message ?? "Erro ao criar ordem"),
   });
@@ -173,7 +231,7 @@ export default function Producao() {
   });
 
   const finalizeMO = useMutation({
-    mutationFn: async (mo: ManufacturingOrderRow) => {
+    mutationFn: async ({ mo, skipBom }: { mo: ManufacturingOrderRow; skipBom: boolean }) => {
       if (!mo.product_id) throw new Error("Ordem sem produto");
       if ((mo.status ?? "") === "Finalizada") return;
 
@@ -185,25 +243,29 @@ export default function Producao() {
         p_product_id: mo.product_id,
         p_type: "Entrada",
         p_quantity: orderQty,
-        p_reason: `Produção Finalizada (OF #${codeOrId})`,
+        p_reason: skipBom
+          ? `Produção Finalizada (Sem baixa de insumos) (OF #${codeOrId})`
+          : `Produção Finalizada (OF #${codeOrId})`,
         p_reference_id: mo.id,
       });
       if (mvErr) throw mvErr;
 
-      // 2. Dá saída nas matérias-primas cadastradas na Ficha Técnica (BOM)
-      const bom = await getProductBom(mo.product_id);
-      for (const item of bom) {
-        if (item.rawMaterialId && item.quantityPerUnit > 0) {
-          const consumedQty = Number(item.quantityPerUnit) * orderQty;
-          const { error: rawErr } = await (supabase as any).rpc("apply_movement", {
-            p_product_id: item.rawMaterialId,
-            p_type: "Saída",
-            p_quantity: consumedQty,
-            p_reason: `Consumo Matéria-Prima (OF #${codeOrId})`,
-            p_reference_id: mo.id,
-          });
-          if (rawErr) {
-            console.warn("Aviso ao baixar insumo:", rawErr);
+      // 2. Dá saída nas matérias-primas cadastradas na Ficha Técnica (BOM) apenas se NÃO for skipBom
+      if (!skipBom) {
+        const bom = await getProductBom(mo.product_id);
+        for (const item of bom) {
+          if (item.rawMaterialId && item.quantityPerUnit > 0) {
+            const consumedQty = Number(item.quantityPerUnit) * orderQty;
+            const { error: rawErr } = await (supabase as any).rpc("apply_movement", {
+              p_product_id: item.rawMaterialId,
+              p_type: "Saída",
+              p_quantity: consumedQty,
+              p_reason: `Consumo Matéria-Prima (OF #${codeOrId})`,
+              p_reference_id: mo.id,
+            });
+            if (rawErr) {
+              console.warn("Aviso ao baixar insumo:", rawErr);
+            }
           }
         }
       }
@@ -215,8 +277,14 @@ export default function Producao() {
         .eq("id", mo.id);
       if (upErr) throw upErr;
     },
-    onSuccess: async () => {
-      toast.success("Ordem finalizada: produto gerado e insumos baixados com sucesso!");
+    onSuccess: async (_, vars) => {
+      toast.success(
+        vars.skipBom
+          ? "Ordem finalizada: produto adicionado ao estoque sem descontar insumos!"
+          : "Ordem finalizada: produto gerado e insumos baixados com sucesso!"
+      );
+      setFinalizeTarget(null);
+      setFinalizeSkipBom(false);
       await qc.invalidateQueries({ queryKey: ["manufacturing_orders"] });
       await qc.invalidateQueries({ queryKey: ["products"] });
       await qc.invalidateQueries({ queryKey: ["stock_movements"] });
@@ -374,8 +442,48 @@ export default function Producao() {
                       <Input type="number" min={1} value={quantity} onChange={(e) => setQuantity(Number(e.target.value))} />
                     </div>
 
+                    <div className="rounded-lg border border-border/60 bg-muted/20 p-3 space-y-3">
+                      <div className="flex items-center space-x-2.5">
+                        <Checkbox
+                          id="direct-finalize"
+                          checked={createDirectFinalized}
+                          onCheckedChange={(c) => {
+                            setCreateDirectFinalized(Boolean(c));
+                            if (!c) setCreateSkipBom(false);
+                          }}
+                        />
+                        <label
+                          htmlFor="direct-finalize"
+                          className="text-xs font-semibold leading-none cursor-pointer text-foreground"
+                        >
+                          Marcar como já finalizada (Dar entrada imediata no estoque)
+                        </label>
+                      </div>
+
+                      {createDirectFinalized && (
+                        <div className="pl-6 pt-1 space-y-1.5 border-t border-border/40">
+                          <div className="flex items-center space-x-2">
+                            <Checkbox
+                              id="create-skip-bom"
+                              checked={createSkipBom}
+                              onCheckedChange={(c) => setCreateSkipBom(Boolean(c))}
+                            />
+                            <label
+                              htmlFor="create-skip-bom"
+                              className="text-xs font-semibold leading-none cursor-pointer text-amber-600 dark:text-amber-400"
+                            >
+                              Não descontar insumos da Ficha Técnica (ingredientes consumidos anteriormente)
+                            </label>
+                          </div>
+                          <p className="text-[11px] text-muted-foreground leading-relaxed">
+                            Ideal para produções desta semana feitas com matérias-primas que não foram lançadas no sistema.
+                          </p>
+                        </div>
+                      )}
+                    </div>
+
                     <Button type="button" variant="hero" onClick={() => createMO.mutate()} disabled={createMO.isPending}>
-                      Criar Ordem
+                      {createDirectFinalized ? "Criar e Finalizar Produção" : "Criar Ordem"}
                     </Button>
                   </div>
                 </DialogContent>
@@ -466,7 +574,14 @@ export default function Producao() {
                             {statusBadge(o.status)}
                             <Select
                               value={o.status ?? "Planejada"}
-                              onValueChange={(v) => updateStatus.mutate({ id: o.id, next: v })}
+                              onValueChange={(v) => {
+                                if (v === "Finalizada") {
+                                  setFinalizeTarget(o);
+                                  setFinalizeSkipBom(false);
+                                } else {
+                                  updateStatus.mutate({ id: o.id, next: v });
+                                }
+                              }}
                               disabled={(o.status ?? "") === "Finalizada" || (o.status ?? "") === "Cancelada" || updateStatus.isPending}
                             >
                               <SelectTrigger className="h-8 w-[160px]">
@@ -513,7 +628,10 @@ export default function Producao() {
                               size="sm"
                               variant="outline"
                               className="gap-2"
-                              onClick={() => finalizeMO.mutate(o)}
+                              onClick={() => {
+                                setFinalizeTarget(o);
+                                setFinalizeSkipBom(false);
+                              }}
                               disabled={finalizeMO.isPending || (o.status ?? "") === "Finalizada" || (o.status ?? "") === "Cancelada"}
                             >
                               <CheckCircle2 className="h-4 w-4" />
@@ -541,6 +659,73 @@ export default function Producao() {
             </Card>
           )}
         </div>
+
+        {/* Modal de confirmação para finalizar ordem com opção de pular baixa de insumos */}
+        <Dialog open={Boolean(finalizeTarget)} onOpenChange={(open) => { if (!open) setFinalizeTarget(null); }}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+                Finalizar Ordem de Produção
+              </DialogTitle>
+            </DialogHeader>
+            {finalizeTarget && (
+              <div className="space-y-4 py-2">
+                <p className="text-sm text-foreground">
+                  Confirmar a conclusão da fabricação de{" "}
+                  <strong>
+                    {finalizeTarget.quantity} un. de {finalizeTarget.products?.name ?? "Produto"}
+                  </strong>
+                  ?
+                </p>
+
+                <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 space-y-2">
+                  <div className="flex items-center space-x-2.5">
+                    <Checkbox
+                      id="finalize-skip-bom"
+                      checked={finalizeSkipBom}
+                      onCheckedChange={(c) => setFinalizeSkipBom(Boolean(c))}
+                    />
+                    <label
+                      htmlFor="finalize-skip-bom"
+                      className="text-xs font-semibold leading-none cursor-pointer text-foreground"
+                    >
+                      Não descontar insumos da Ficha Técnica (ingredientes consumidos anteriormente)
+                    </label>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground leading-relaxed pl-6">
+                    Marque esta opção para produções feitas com matérias-primas que não foram lançadas no estoque ou para produções desta semana antes do controle de estoque.
+                  </p>
+                </div>
+
+                <div className="flex justify-end gap-2 pt-2">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => setFinalizeTarget(null)}
+                    disabled={finalizeMO.isPending}
+                  >
+                    Cancelar
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="hero"
+                    onClick={() => {
+                      if (finalizeTarget) {
+                        finalizeMO.mutate({ mo: finalizeTarget, skipBom: finalizeSkipBom });
+                      }
+                    }}
+                    disabled={finalizeMO.isPending}
+                    className="gap-2"
+                  >
+                    <CheckCircle2 className="h-4 w-4" />
+                    Confirmar e Finalizar
+                  </Button>
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
       </section>
     </AppShell>
   );

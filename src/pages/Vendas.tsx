@@ -8,6 +8,8 @@ import { Card } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
 import { exportToCsv } from "@/lib/exportCsv";
 import { SalePrintDialog } from "@/components/sales/SalePrintDialog";
 import { Input } from "@/components/ui/input";
@@ -43,7 +45,13 @@ type SaleRow = {
   total_amount: number | null;
   clients?: { name: string | null } | null;
   client_id?: string | null;
+  observations?: string | null;
 };
+
+const SKIP_STOCK_TAG = "[SEM_BAIXA_ESTOQUE]";
+function isSkipStockSale(obs?: string | null): boolean {
+  return Boolean(obs && obs.includes(SKIP_STOCK_TAG));
+}
 
 type ClientRow = { id: string; name: string };
 type ProductRowLite = {
@@ -124,7 +132,7 @@ async function upsertReceberForSale(params: {
 async function fetchSales(orgId?: string): Promise<SaleRow[]> {
   let query = supabase
     .from("sales")
-    .select("id,created_at,code,status,total_amount,client_id,clients(name)")
+    .select("id,created_at,code,status,total_amount,client_id,observations,clients(name)")
     .order("created_at", { ascending: false });
 
   if (orgId) query = query.eq("organization_id", orgId);
@@ -183,6 +191,9 @@ export default function Vendas() {
   const [clientId, setClientId] = React.useState<string>("");
   const [saleDate, setSaleDate] = React.useState<string>(() => new Date().toISOString().slice(0, 10));
   const [status, setStatus] = React.useState<string>("Pedido");
+  const [skipStockMovement, setSkipStockMovement] = React.useState<boolean>(false);
+  const [originalSkipStock, setOriginalSkipStock] = React.useState<boolean>(false);
+  const [observations, setObservations] = React.useState<string>("");
   const [items, setItems] = React.useState<SaleItemDraft[]>([{ product_id: "", quantity: 1, unit_price: 0 }]);
 
   const total = React.useMemo(() => {
@@ -230,6 +241,11 @@ export default function Vendas() {
       const clientName = (clients ?? []).find((c) => c.id === clientId)?.name ?? null;
       const saleCreatedAt = saleDate ? new Date(`${saleDate}T12:00:00`).toISOString() : new Date().toISOString();
 
+      let finalObs = observations.replace(SKIP_STOCK_TAG, "").trim();
+      if (skipStockMovement) {
+        finalObs = finalObs ? `${SKIP_STOCK_TAG} ${finalObs}` : SKIP_STOCK_TAG;
+      }
+
       if (!editingSaleId) {
         const { data: saleInserted, error: saleErr } = await supabase
           .from("sales")
@@ -239,6 +255,7 @@ export default function Vendas() {
             total_amount: total,
             gross_amount: total,
             created_at: saleCreatedAt,
+            observations: finalObs || null,
             organization_id: currentOrg?.id,
           } as any)
           .select("id")
@@ -253,12 +270,12 @@ export default function Vendas() {
         const { error: itemsErr } = await supabase.from("sale_items").insert(itemsPayload as any);
         if (itemsErr) throw itemsErr;
 
-        // Estoque: só baixa em Faturado/Entregue
-        if (isStockMovingSaleStatus(status)) {
+        // Estoque: só baixa em Faturado/Entregue se NÃO for venda sem baixa de estoque
+        if (isStockMovingSaleStatus(status) && !skipStockMovement) {
           await applyMovementBatch({ type: "Saída", saleId, its: validItems, reason: `Venda (${status})` });
         }
 
-        // Financeiro: Faturado/Entregue cria/atualiza Receber
+        // Financeiro: Faturado/Entregue cria/atualiza Receber (mesmo sem baixa física)
         if (isStockMovingSaleStatus(status)) {
           await upsertReceberForSale({ saleId, clientName, amount: Number(total), nextStatus: status, orgId: currentOrg?.id });
         }
@@ -269,6 +286,9 @@ export default function Vendas() {
 
         const wasMoving = isStockMovingSaleStatus(prevStatus);
         const nextMoving = isStockMovingSaleStatus(nextStatus);
+
+        const wasStockDeducted = wasMoving && !originalSkipStock;
+        const willDeductStock = nextMoving && !skipStockMovement;
 
         // Se cancelar, trava itens (não permite mudar itens ao salvar como Cancelado)
         const oldMap = toQtyMap(originalItems);
@@ -282,12 +302,13 @@ export default function Vendas() {
           throw new Error("Venda cancelada: itens travados. Para ajustar itens, reabra o documento (fora do escopo do MVP).");
         }
 
-        // Atualiza venda (totais, status e data da venda)
+        // Atualiza venda (totais, status, data da venda e observações)
         const updatePayload: any = {
           client_id: clientId,
           status: nextStatus,
           total_amount: total,
           gross_amount: total,
+          observations: finalObs || null,
         };
         if (saleCreatedAt) {
           updatePayload.created_at = saleCreatedAt;
@@ -311,12 +332,12 @@ export default function Vendas() {
           if (insErr) throw insErr;
         }
 
-        // Estoque (transição)
-        if (!wasMoving && nextMoving) {
+        // Estoque (transição considerando skipStockMovement)
+        if (!wasStockDeducted && willDeductStock) {
           await applyMovementBatch({ type: "Saída", saleId, its: validItems, reason: `Venda (${nextStatus})` });
-        } else if (wasMoving && !nextMoving) {
+        } else if (wasStockDeducted && !willDeductStock) {
           await applyMovementBatch({ type: "Entrada", saleId, its: originalItems, reason: `Estorno Venda (${nextStatus})` });
-        } else if (wasMoving && nextMoving) {
+        } else if (wasStockDeducted && willDeductStock) {
           // Diff por produto
           for (const [productId, oldQty] of oldMap) {
             const newQty = newMap.get(productId) ?? 0;
@@ -348,7 +369,7 @@ export default function Vendas() {
         // Financeiro: upsert quando Faturado/Entregue; ao Cancelar marca Cancelado se não estiver Pago
         if (nextMoving) {
           await upsertReceberForSale({ saleId, clientName, amount: Number(total), nextStatus: nextStatus, orgId: currentOrg?.id });
-        } else if (nextStatus === "Cancelado" && wasMoving) {
+        } else if (nextStatus === "Cancelado" && (wasMoving || wasStockDeducted)) {
           await upsertReceberForSale({ saleId, clientName, amount: Number(total), nextStatus: "Cancelado", orgId: currentOrg?.id });
         }
       }
@@ -360,6 +381,9 @@ export default function Vendas() {
       setClientId("");
       setSaleDate(new Date().toISOString().slice(0, 10));
       setStatus("Pedido");
+      setSkipStockMovement(false);
+      setOriginalSkipStock(false);
+      setObservations("");
       setItems([{ product_id: "", quantity: 1, unit_price: 0 }]);
       setOriginalItems([]);
       setOriginalStatus("Pedido");
@@ -395,6 +419,9 @@ export default function Vendas() {
     setClientId("");
     setSaleDate(new Date().toISOString().slice(0, 10));
     setStatus("Pedido");
+    setSkipStockMovement(false);
+    setOriginalSkipStock(false);
+    setObservations("");
     setItems([{ product_id: "", quantity: 1, unit_price: 0 }]);
     setOpen(true);
   };
@@ -406,6 +433,11 @@ export default function Vendas() {
       setSaleDate(sale.created_at ? sale.created_at.slice(0, 10) : new Date().toISOString().slice(0, 10));
       setStatus(sale.status ?? "Pedido");
       setOriginalStatus(sale.status ?? "Pedido");
+      const obs = sale.observations ?? "";
+      const skipped = isSkipStockSale(obs);
+      setSkipStockMovement(skipped);
+      setOriginalSkipStock(skipped);
+      setObservations(obs.replace(SKIP_STOCK_TAG, "").trim());
 
       const its = await fetchSaleItems(sale.id);
       const prodMap = new Map((products ?? []).map((p) => [p.id, p]));
@@ -538,6 +570,38 @@ export default function Vendas() {
                 <p className="-mt-2 text-xs text-muted-foreground">
                   Estoque só é movimentado em <b>Faturado</b> e <b>Entregue</b>. Cancelado estorna se já havia movimentação.
                 </p>
+
+                {/* Opção especial: Venda sem baixa de estoque (Item 5) */}
+                <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 space-y-2">
+                  <div className="flex items-center space-x-2.5">
+                    <Checkbox
+                      id="skip-stock"
+                      checked={skipStockMovement}
+                      onCheckedChange={(c) => setSkipStockMovement(Boolean(c))}
+                      disabled={status === "Cancelado"}
+                    />
+                    <label
+                      htmlFor="skip-stock"
+                      className="text-xs font-semibold leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer text-foreground"
+                    >
+                      Não descontar do estoque atual (Venda sem baixa de estoque)
+                    </label>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground leading-relaxed pl-6">
+                    Ideal para vendas realizadas <strong>antes de alimentar o estoque inicial</strong> (ex: trufas já prontas ou vendas antigas). O valor a receber é gerado no Financeiro, mas a quantidade física não será subtraída do estoque.
+                  </p>
+                </div>
+
+                <div className="grid gap-1.5">
+                  <Label className="text-xs">Observações (Opcional)</Label>
+                  <Input
+                    value={observations}
+                    onChange={(e) => setObservations(e.target.value)}
+                    placeholder="Ex: Venda anterior ao inventário inicial"
+                    className="h-8 text-xs"
+                    disabled={status === "Cancelado"}
+                  />
+                </div>
 
                 <div className="grid gap-2">
                   <div className="flex items-center justify-between">
@@ -747,7 +811,16 @@ export default function Vendas() {
                           {formatDateBR(s.created_at)}
                         </TableCell>
                         <TableCell className="font-semibold">{s.clients?.name ?? "—"}</TableCell>
-                        <TableCell>{s.status ?? "—"}</TableCell>
+                        <TableCell>
+                          <div className="flex flex-col gap-1 items-start">
+                            <span>{s.status ?? "—"}</span>
+                            {isSkipStockSale(s.observations) && (
+                              <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-600 border-amber-500/30">
+                                Sem baixa estoque
+                              </Badge>
+                            )}
+                          </div>
+                        </TableCell>
                         <TableCell className="text-right font-bold">{formatBRL(Number(s.total_amount ?? 0))}</TableCell>
                         <TableCell className="text-right">
                           <div className="inline-flex items-center gap-2">

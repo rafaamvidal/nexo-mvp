@@ -5,20 +5,25 @@ import {
   ArrowDownCircle,
   ArrowUpCircle,
   BarChart3,
+  Calendar,
   Check,
   CheckCircle2,
+  ChevronDown,
+  ChevronRight,
   DollarSign,
   Download,
   Filter,
   Layers,
   Pencil,
+  PieChart,
   Plus,
   Search,
+  Tag,
   Trash2,
   TrendingUp,
   Wallet,
 } from "lucide-react";
-import { addMonths, endOfMonth, isBefore, isToday, parseISO, startOfDay, startOfMonth } from "date-fns";
+import { addMonths, endOfMonth, isBefore, isToday, parseISO, startOfDay, startOfMonth, subMonths } from "date-fns";
 import { exportToCsv } from "@/lib/exportCsv";
 
 import { AppShell } from "@/components/layout/AppShell";
@@ -33,6 +38,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Progress } from "@/components/ui/progress";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import {
@@ -88,7 +94,11 @@ export default function Financeiro() {
   const [q, setQ] = React.useState("");
   const [statusFilter, setStatusFilter] = React.useState<string>("all");
   const [typeFilter, setTypeFilter] = React.useState<string>("all");
-  const [periodFilter, setPeriodFilter] = React.useState<string>("all");
+  const [periodFilter, setPeriodFilter] = React.useState<string>("mes");
+  const [selectedMonth, setSelectedMonth] = React.useState<string>(() => new Date().toISOString().slice(0, 7));
+  const [customStart, setCustomStart] = React.useState<string>("");
+  const [customEnd, setCustomEnd] = React.useState<string>("");
+  const [categoryFilter, setCategoryFilter] = React.useState<string>("all");
 
   // Diálogos de criação e edição
   const [open, setOpen] = React.useState(false);
@@ -120,9 +130,82 @@ export default function Financeiro() {
   const todayStr = new Date().toISOString().slice(0, 10);
   const todayDate = startOfDay(new Date());
 
-  // KPIs
-  const kpis = React.useMemo(() => {
+  // Definição do intervalo de datas selecionado
+  const dateRange = React.useMemo(() => {
+    const now = new Date();
+    if (periodFilter === "hoje") {
+      return { start: todayStr, end: todayStr, label: "Hoje" };
+    }
+    if (periodFilter === "mes") {
+      const s = startOfMonth(now).toISOString().slice(0, 10);
+      const e = endOfMonth(now).toISOString().slice(0, 10);
+      const monthNames = [
+        "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+        "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
+      ];
+      return { start: s, end: e, label: `${monthNames[now.getMonth()]}/${now.getFullYear()}` };
+    }
+    if (periodFilter === "mes_anterior") {
+      const prev = subMonths(now, 1);
+      const s = startOfMonth(prev).toISOString().slice(0, 10);
+      const e = endOfMonth(prev).toISOString().slice(0, 10);
+      const monthNames = [
+        "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+        "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
+      ];
+      return { start: s, end: e, label: `${monthNames[prev.getMonth()]}/${prev.getFullYear()}` };
+    }
+    if (periodFilter === "mes_especifico") {
+      if (!selectedMonth) return { start: null, end: null, label: "Mês Selecionado" };
+      const [y, m] = selectedMonth.split("-").map(Number);
+      const d = new Date(y, m - 1, 1);
+      const s = startOfMonth(d).toISOString().slice(0, 10);
+      const e = endOfMonth(d).toISOString().slice(0, 10);
+      const monthNames = [
+        "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+        "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
+      ];
+      const monthLabel = monthNames[m - 1] ? `${monthNames[m - 1]}/${y}` : selectedMonth;
+      return { start: s, end: e, label: monthLabel };
+    }
+    if (periodFilter === "custom") {
+      const label = customStart && customEnd ? `${formatDateBR(customStart)} até ${formatDateBR(customEnd)}` : "Personalizado";
+      return { start: customStart || null, end: customEnd || null, label };
+    }
+    if (periodFilter === "vencidas") {
+      return { start: null, end: todayStr, label: "Apenas Vencidas" };
+    }
+    return { start: null, end: null, label: "Todo o período" };
+  }, [periodFilter, selectedMonth, customStart, customEnd, todayStr]);
+
+  // Registros dentro do período selecionado
+  const periodRecords = React.useMemo(() => {
     const list = data ?? [];
+    return list.filter((r) => {
+      if (periodFilter === "vencidas") {
+        return (r.status ?? "").toLowerCase() === "aberto" && r.due_date < todayStr;
+      }
+      if (dateRange.start && r.due_date < dateRange.start) return false;
+      if (dateRange.end && r.due_date > dateRange.end) return false;
+      return true;
+    });
+  }, [data, periodFilter, dateRange, todayStr]);
+
+  // Categorias disponíveis no cadastro
+  const availableCategories = React.useMemo(() => {
+    const list = data ?? [];
+    const set = new Set<string>();
+    for (const r of list) {
+      if (r.category && r.category.trim()) {
+        set.add(r.category.trim());
+      }
+    }
+    return Array.from(set).sort();
+  }, [data]);
+
+  // KPIs calculados sobre o período ativo
+  const kpis = React.useMemo(() => {
+    const list = periodRecords;
     let aReceber = 0;
     let aPagar = 0;
     let totalPago = 0;
@@ -154,16 +237,55 @@ export default function Financeiro() {
     return {
       aReceber,
       aPagar,
+      totalPago,
+      totalRecebido,
       saldoPrevisto: aReceber - aPagar,
       saldoRealizado: totalRecebido - totalPago,
       vencidosValor,
       vencidosQtd,
     };
-  }, [data, todayStr]);
+  }, [periodRecords, todayStr]);
 
-  // DRE Gerencial (Demonstrativo do Resultado do Exercício)
+  // Agrupamento de Gastos por Categoria (Item 3)
+  const categoryExpenses = React.useMemo(() => {
+    let totalDespesas = 0;
+    const catMap = new Map<string, { total: number; count: number; items: FinRow[] }>();
+
+    for (const r of periodRecords) {
+      if ((r.status ?? "").toLowerCase() === "cancelado") continue;
+      if ((r.type ?? "").toLowerCase() !== "pagar") continue;
+
+      const val = Number(r.amount ?? 0);
+      totalDespesas += val;
+      const cat = (r.category ?? "Geral / Sem Categoria").trim();
+
+      const existing = catMap.get(cat) ?? { total: 0, count: 0, items: [] };
+      existing.total += val;
+      existing.count += 1;
+      existing.items.push(r);
+      catMap.set(cat, existing);
+    }
+
+    const categories = Array.from(catMap.entries())
+      .map(([name, stat]) => ({
+        name,
+        total: stat.total,
+        count: stat.count,
+        percent: totalDespesas > 0 ? (stat.total / totalDespesas) * 100 : 0,
+        items: stat.items,
+      }))
+      .sort((a, b) => b.total - a.total);
+
+    return {
+      totalDespesas,
+      countTotal: categories.reduce((acc, c) => acc + c.count, 0),
+      categories,
+    };
+  }, [periodRecords]);
+
+  // DRE Gerencial sobre o período ativo
   const dre = React.useMemo(() => {
-    const list = data ?? [];
+    const list = periodRecords;
     let receitaBruta = 0;
     let custosInsumos = 0;
     let despesasOperacionais = 0;
@@ -206,7 +328,7 @@ export default function Financeiro() {
       margemLiquida,
       categories: Array.from(catMap.entries()).sort((a, b) => b[1] - a[1]),
     };
-  }, [data]);
+  }, [periodRecords]);
 
   // Fluxo de Caixa Projetado (Próximos 7, 15, 30 e 60 dias)
   const cashflow = React.useMemo(() => {
@@ -241,10 +363,9 @@ export default function Financeiro() {
     };
   }, [data, todayStr]);
 
-  // Lista filtrada
+  // Lista filtrada para o extrato (respeita período, busca, tipo, status e categoria)
   const filtered = React.useMemo(() => {
-    const list = data ?? [];
-    return list.filter((r) => {
+    return periodRecords.filter((r) => {
       // Busca texto
       const term = q.trim().toLowerCase();
       const matchSearch =
@@ -259,6 +380,11 @@ export default function Financeiro() {
         (typeFilter === "receber" && rType === "receber") ||
         (typeFilter === "pagar" && rType === "pagar");
 
+      // Categoria
+      const matchCategory =
+        categoryFilter === "all" ||
+        (r.category ?? "").trim().toLowerCase() === categoryFilter.trim().toLowerCase();
+
       // Status
       const isAberto = (r.status ?? "").toLowerCase() === "aberto";
       const isPago = (r.status ?? "").toLowerCase() === "pago";
@@ -270,21 +396,9 @@ export default function Financeiro() {
       else if (statusFilter === "vencido") matchStatus = isVencido;
       else if (statusFilter === "cancelado") matchStatus = (r.status ?? "").toLowerCase() === "cancelado";
 
-      // Período
-      let matchPeriod = true;
-      if (periodFilter === "hoje") {
-        matchPeriod = r.due_date === todayStr;
-      } else if (periodFilter === "mes") {
-        const start = startOfMonth(new Date()).toISOString().slice(0, 10);
-        const end = endOfMonth(new Date()).toISOString().slice(0, 10);
-        matchPeriod = r.due_date >= start && r.due_date <= end;
-      } else if (periodFilter === "vencidas") {
-        matchPeriod = isVencido;
-      }
-
-      return matchSearch && matchType && matchStatus && matchPeriod;
+      return matchSearch && matchType && matchCategory && matchStatus;
     });
-  }, [data, q, statusFilter, typeFilter, periodFilter, todayStr]);
+  }, [periodRecords, q, typeFilter, categoryFilter, statusFilter, todayStr]);
 
   // Baixa rápida (1 clique)
   const settleMutation = useMutation({
@@ -727,6 +841,93 @@ export default function Financeiro() {
           </div>
         </div>
 
+        {/* BARRA DE FILTRO DE PERÍODO / DATA (Item 4) */}
+        <Card className="glass p-3 border-border/60">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5">
+              <div className="p-2 rounded-lg bg-primary/10 text-primary shrink-0">
+                <Calendar className="h-4 w-4" />
+              </div>
+              <div>
+                <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block">
+                  Período Financeiro
+                </span>
+                <div className="text-sm font-bold flex flex-wrap items-center gap-1.5 text-foreground">
+                  <span>{dateRange.label}</span>
+                  {dateRange.start && dateRange.end && (
+                    <span className="text-[11px] font-normal text-muted-foreground">
+                      ({formatDateBR(dateRange.start)} a {formatDateBR(dateRange.end)})
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <Select value={periodFilter} onValueChange={setPeriodFilter}>
+                <SelectTrigger className="w-[160px] h-9 text-xs">
+                  <SelectValue placeholder="Selecionar Período" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="mes">Este Mês</SelectItem>
+                  <SelectItem value="mes_anterior">Mês Anterior</SelectItem>
+                  <SelectItem value="mes_especifico">Mês Específico</SelectItem>
+                  <SelectItem value="custom">Personalizado (Datas)</SelectItem>
+                  <SelectItem value="hoje">Vencem Hoje</SelectItem>
+                  <SelectItem value="vencidas">Apenas Vencidas</SelectItem>
+                  <SelectItem value="all">Todo o Período</SelectItem>
+                </SelectContent>
+              </Select>
+
+              {periodFilter === "mes_especifico" && (
+                <Input
+                  type="month"
+                  value={selectedMonth}
+                  onChange={(e) => setSelectedMonth(e.target.value)}
+                  className="w-[145px] h-9 text-xs bg-background"
+                />
+              )}
+
+              {periodFilter === "custom" && (
+                <div className="flex items-center gap-1.5">
+                  <Input
+                    type="date"
+                    value={customStart}
+                    onChange={(e) => setCustomStart(e.target.value)}
+                    className="w-[130px] h-9 text-xs bg-background"
+                    placeholder="Início"
+                  />
+                  <span className="text-xs text-muted-foreground">até</span>
+                  <Input
+                    type="date"
+                    value={customEnd}
+                    onChange={(e) => setCustomEnd(e.target.value)}
+                    className="w-[130px] h-9 text-xs bg-background"
+                    placeholder="Fim"
+                  />
+                </div>
+              )}
+
+              {periodFilter !== "mes" && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setPeriodFilter("mes");
+                    setSelectedMonth(new Date().toISOString().slice(0, 7));
+                    setCustomStart("");
+                    setCustomEnd("");
+                  }}
+                  className="h-9 text-xs text-muted-foreground"
+                >
+                  Restaurar Mês Atual
+                </Button>
+              )}
+            </div>
+          </div>
+        </Card>
+
         {/* CARDS DE INDICADORES (KPIs) */}
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <Card className="glass border-border/60">
@@ -793,10 +994,14 @@ export default function Financeiro() {
         </div>
 
         <Tabs value={mainTab} onValueChange={setMainTab} className="mt-6">
-          <TabsList className="grid w-full grid-cols-3 sm:w-[480px]">
+          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 sm:w-[620px]">
             <TabsTrigger value="extrato" className="gap-2 text-xs">
               <Wallet className="h-4 w-4" />
               Lançamentos
+            </TabsTrigger>
+            <TabsTrigger value="categorias" className="gap-2 text-xs">
+              <PieChart className="h-4 w-4" />
+              Gastos por Categoria
             </TabsTrigger>
             <TabsTrigger value="dre" className="gap-2 text-xs">
               <BarChart3 className="h-4 w-4" />
@@ -847,19 +1052,21 @@ export default function Financeiro() {
                 </SelectContent>
               </Select>
 
-              <Select value={periodFilter} onValueChange={setPeriodFilter}>
+              <Select value={categoryFilter} onValueChange={setCategoryFilter}>
                 <SelectTrigger className="w-[140px] h-9 text-xs">
-                  <SelectValue placeholder="Período" />
+                  <SelectValue placeholder="Categoria" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Todo o período</SelectItem>
-                  <SelectItem value="hoje">Vencem Hoje</SelectItem>
-                  <SelectItem value="mes">Deste Mês</SelectItem>
-                  <SelectItem value="vencidas">Apenas Vencidas</SelectItem>
+                  <SelectItem value="all">Todas categorias</SelectItem>
+                  {availableCategories.map((cat) => (
+                    <SelectItem key={cat} value={cat}>
+                      {cat}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
 
-              {(q || typeFilter !== "all" || statusFilter !== "all" || periodFilter !== "all") && (
+              {(q || typeFilter !== "all" || statusFilter !== "all" || categoryFilter !== "all") && (
                 <Button
                   type="button"
                   variant="ghost"
@@ -868,7 +1075,7 @@ export default function Financeiro() {
                     setQ("");
                     setTypeFilter("all");
                     setStatusFilter("all");
-                    setPeriodFilter("all");
+                    setCategoryFilter("all");
                   }}
                   className="h-9 text-xs text-muted-foreground"
                 >
@@ -1021,6 +1228,130 @@ export default function Financeiro() {
             </Card>
           )}
           </div>
+        </TabsContent>
+
+        {/* GASTOS POR CATEGORIA (Item 3) */}
+        <TabsContent value="categorias" className="mt-4 space-y-4">
+          <div className="grid gap-4 sm:grid-cols-3">
+            <Card className="glass border-rose-500/20 bg-rose-500/5">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  Total de Despesas no Período
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-rose-600">
+                  {formatBRL(categoryExpenses.totalDespesas)}
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {categoryExpenses.countTotal} lançamento(s) de saída
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card className="glass border-border/60">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  Maior Centro de Custo
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-xl font-bold truncate">
+                  {categoryExpenses.categories[0]?.name || "Nenhum"}
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {categoryExpenses.categories[0]
+                    ? `${formatBRL(categoryExpenses.categories[0].total)} (${categoryExpenses.categories[0].percent.toFixed(1)}%)`
+                    : "Sem lançamentos no período"}
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card className="glass border-border/60">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  Total de Categorias
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-foreground">
+                  {categoryExpenses.categories.length}
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Média de {formatBRL(categoryExpenses.countTotal > 0 ? categoryExpenses.totalDespesas / categoryExpenses.countTotal : 0)} por lançamento
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+
+          <Card className="glass p-5 border border-border/60">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-border/40 gap-2">
+              <div>
+                <h3 className="text-base font-semibold flex items-center gap-2">
+                  <PieChart className="h-4 w-4 text-primary" />
+                  Detalhamento de Gastos por Categoria
+                </h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Visão agrupada de despesas no período selecionado ({dateRange.label}).
+                </p>
+              </div>
+            </div>
+
+            {categoryExpenses.categories.length === 0 ? (
+              <div className="py-12 text-center text-muted-foreground">
+                <Layers className="h-8 w-8 mx-auto mb-2 opacity-40" />
+                <p className="text-sm font-medium">Nenhum gasto registrado neste período.</p>
+                <p className="text-xs mt-1">Ajuste o filtro de período ou registre uma despesa com categoria.</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-border/40">
+                {categoryExpenses.categories.map((cat, idx) => (
+                  <div key={cat.name} className="py-4 space-y-2 first:pt-2">
+                    <div className="flex items-center justify-between gap-4">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <span className="flex items-center justify-center h-6 w-6 rounded-full bg-primary/10 text-primary text-xs font-bold shrink-0">
+                          {idx + 1}
+                        </span>
+                        <div className="min-w-0">
+                          <span className="font-semibold text-sm text-foreground truncate block">{cat.name}</span>
+                          <span className="text-xs text-muted-foreground">
+                            {cat.count} {cat.count === 1 ? "despesa" : "despesas"}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-3 shrink-0">
+                        <div className="text-right">
+                          <span className="text-base font-bold text-foreground">{formatBRL(cat.total)}</span>
+                          <span className="block text-[11px] text-muted-foreground">
+                            {cat.percent.toFixed(1)}% do total
+                          </span>
+                        </div>
+
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setCategoryFilter(cat.name);
+                            setMainTab("extrato");
+                          }}
+                          className="h-8 px-2 text-xs gap-1 text-primary hover:text-primary hidden sm:inline-flex"
+                          title="Filtrar lançamentos desta categoria"
+                        >
+                          Ver no extrato
+                          <ChevronRight className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className="relative pt-1">
+                      <Progress value={cat.percent} className="h-2" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
         </TabsContent>
 
           {/* DRE GERENCIAL */}

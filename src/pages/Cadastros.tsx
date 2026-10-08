@@ -540,7 +540,7 @@ export default function Cadastros() {
 
               {/* ABA CLIENTES */}
               <TabsContent value="clientes" className="mt-4">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div className="inline-flex items-center gap-2 text-sm font-semibold">
                     <Users className="h-4 w-4 text-muted-foreground" />
                     Clientes Cadastrados ({filteredClients.length})
@@ -687,7 +687,7 @@ export default function Cadastros() {
 
               {/* ABA FORNECEDORES */}
               <TabsContent value="fornecedores" className="mt-4">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div className="inline-flex items-center gap-2 text-sm font-semibold">
                     <Users className="h-4 w-4 text-muted-foreground" />
                     Fornecedores Cadastrados ({filteredSuppliers.length})

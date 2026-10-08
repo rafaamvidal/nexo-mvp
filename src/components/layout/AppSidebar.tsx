@@ -5,6 +5,7 @@ import { NavLink, useLocation } from "react-router-dom";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
 import { useAuth } from "@/hooks/useAuth";
 import { ProfileDialog } from "@/components/profile/ProfileDialog";
+import { PwaInstallPrompt } from "@/components/pwa/PwaInstallPrompt";
 
 import {
   Sidebar,
@@ -89,7 +90,13 @@ export function AppSidebar() {
 
       <SidebarSeparator />
 
-      <SidebarFooter>
+      <SidebarFooter className="gap-2">
+        {!collapsed && (
+          <div className="px-1">
+            <PwaInstallPrompt variant="sidebar" />
+          </div>
+        )}
+
         <div className={cn("flex items-center gap-2", collapsed ? "justify-center" : "justify-between")}>
           {!collapsed ? (
             <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">{user?.email ?? ""}</span>

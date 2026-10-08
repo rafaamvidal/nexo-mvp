@@ -430,7 +430,7 @@ export default function RH() {
 
         {/* ABAS DO MÓDULO */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-          <TabsList className="grid w-full grid-cols-4 sm:w-[560px]">
+          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 sm:w-[560px]">
             <TabsTrigger value="colaboradores" className="gap-2 text-xs">
               <Users className="h-3.5 w-3.5" />
               Colaboradores

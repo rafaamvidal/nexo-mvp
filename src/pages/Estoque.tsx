@@ -131,8 +131,8 @@ export default function Estoque() {
 
         <div className="mt-5">
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="grid w-full grid-cols-3 sm:w-[520px]">
-              <TabsTrigger value="ajuste" className="gap-2 text-xs">
+            <TabsList className="grid w-full grid-cols-1 sm:grid-cols-3 sm:w-[520px] h-auto p-1 gap-1">
+              <TabsTrigger value="ajuste" className="gap-2 text-xs py-2">
                 <Boxes className="h-4 w-4" />
                 Saldos & Ajustes
               </TabsTrigger>
@@ -287,7 +287,7 @@ export default function Estoque() {
               </div>
 
               <Card className="glass border border-border/60">
-                <CardHeader className="flex flex-row items-center justify-between pb-3">
+                <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 gap-3">
                   <div>
                     <CardTitle className="text-base font-semibold">Tabela de Reposição Sugerida</CardTitle>
                     <p className="text-xs text-muted-foreground">
