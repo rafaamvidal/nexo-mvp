@@ -21,6 +21,7 @@ import { useOrganization } from "@/contexts/OrganizationContext";
 import { cleanDigits, getWhatsAppUrl, maskCep, maskCpfCnpj, maskPhone } from "@/lib/masks";
 import { fetchAddressByCep } from "@/lib/viaCep";
 import { SpreadsheetDataImporter } from "@/components/organization/SpreadsheetDataImporter";
+import { ModuleHelpGuide } from "@/components/help/ModuleHelpGuide";
 
 type ClientRow = {
   id: string;
@@ -558,7 +559,24 @@ export default function Cadastros() {
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="inline-flex items-center gap-2 text-sm font-semibold">
                   <Users className="h-4 w-4 text-muted-foreground" />
-                  Clientes Cadastrados ({filteredClients.length})
+                  <span>Clientes Cadastrados ({filteredClients.length})</span>
+                  <ModuleHelpGuide
+                    customContent={{
+                      title: "Gestão de Clientes",
+                      subtitle: "Cadastro completo da carteira de clientes",
+                      summary: "Cadastre e acompanhe seus compradores com dados fiscais, limite de crédito e integração WhatsApp em 1 clique.",
+                      whatToRegister: [
+                        "Nome Completo ou Razão Social da empresa.",
+                        "CPF ou CNPJ para emissão de notas e pedidos.",
+                        "Telefone/Celular com WhatsApp para contato rápido.",
+                        "CEP (completa rua, bairro, cidade e UF automaticamente).",
+                        "Limite de crédito para controle de vendas a prazo.",
+                      ],
+                      tips: [
+                        "Toque no botão verde de WhatsApp em qualquer card de cliente para abrir a conversa sem precisar salvar na agenda.",
+                      ],
+                    }}
+                  />
                 </div>
                 <EntityDialog
                   title="Novo Cliente"
@@ -791,7 +809,24 @@ export default function Cadastros() {
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="inline-flex items-center gap-2 text-sm font-semibold">
                     <Truck className="h-4 w-4 text-muted-foreground" />
-                    Fornecedores Cadastrados ({filteredSuppliers.length})
+                    <span>Fornecedores Cadastrados ({filteredSuppliers.length})</span>
+                    <ModuleHelpGuide
+                      customContent={{
+                        title: "Gestão de Fornecedores",
+                        subtitle: "Parceiros e distribuidores de insumos",
+                        summary: "Cadastre as empresas que fornecem matérias-primas e embalagens para a sua produção.",
+                        whatToRegister: [
+                          "Razão Social ou Nome Fantasia do fornecedor.",
+                          "CNPJ para controle fiscal.",
+                          "Nome do Vendedor responsável pelo atendimento.",
+                          "Insumos que fornecem usando a tag [Fornece: Farinha, Fermento, etc.].",
+                          "Telefone e WhatsApp direto do vendedor.",
+                        ],
+                        tips: [
+                          "Cadastrar os produtos que cada parceiro fornece permite localizar o fornecedor ideal em segundos na hora de cotar compras.",
+                        ],
+                      }}
+                    />
                   </div>
                   <EntityDialog
                     title="Novo Fornecedor"

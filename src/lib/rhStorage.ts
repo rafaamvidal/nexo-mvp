@@ -339,13 +339,14 @@ export async function deleteOccurrence(id: string, orgId: string): Promise<void>
 
 /**
  * Lança a folha de pagamento do mês corrente como contas a pagar na tabela financial_records.
- * Cada colaborador ativo com salário > 0 gera um registro com vencimento no 5º dia útil.
+ * Suporta lançamento específico de Vale (40% dia 20), Saldo (60% dia 05) ou ambos.
  */
 export async function launchPayrollToFinancial(
   employees: Employee[],
   referenceMonth: string, // YYYY-MM
-  orgId: string
-): Promise<{ count: number; total: number }> {
+  orgId: string,
+  launchType: "vale_40" | "saldo_60" | "all" = "all"
+): Promise<{ count: number; total: number; type: string }> {
   const activeEmployees = employees.filter(
     (e) => (e.status === "Ativo" || e.status === "Em Férias") && Number(e.base_salary) > 0
   );
@@ -354,11 +355,12 @@ export async function launchPayrollToFinancial(
     throw new Error("Nenhum colaborador ativo com salário cadastrado para gerar a folha.");
   }
 
-  // Data de vencimento: 5º dia útil do mês subsequente (aproximação prática: dia 05 ou dia 07)
   const [yearStr, monthStr] = referenceMonth.split("-");
   const nextMonth = Number(monthStr) === 12 ? 1 : Number(monthStr) + 1;
   const nextYear = Number(monthStr) === 12 ? Number(yearStr) + 1 : Number(yearStr);
-  const dueDate = `${nextYear}-${String(nextMonth).padStart(2, "0")}-05`;
+
+  const dueVale20 = `${yearStr}-${monthStr.padStart(2, "0")}-20`;
+  const dueSaldo05 = `${nextYear}-${String(nextMonth).padStart(2, "0")}-05`;
 
   let totalLaunched = 0;
   let count = 0;
@@ -366,33 +368,53 @@ export async function launchPayrollToFinancial(
   for (const emp of activeEmployees) {
     const salary = Number(emp.base_salary || 0);
     const benefits = Number(emp.benefits_total || 0);
-    const totalAmount = salary + benefits;
 
-    const payload: any = {
-      type: "Pagar",
-      description: `Folha Salarial (${referenceMonth}) - ${emp.name} (${emp.role})`,
-      category: "Salários / RH",
-      entity_name: emp.name,
-      amount: totalAmount,
-      due_date: dueDate,
-      status: "Aberto",
-      organization_id: orgId,
-    };
+    const valeAmount = Math.round(salary * 0.40 * 100) / 100;
+    const saldoAmount = Math.round(salary * 0.60 * 100) / 100 + benefits;
 
-    try {
-      const { error } = await supabase.from("financial_records").insert(payload);
-      if (error) {
-        console.warn("Aviso ao inserir no financeiro:", error);
-      }
-    } catch (err) {
-      console.warn("Erro ao comunicar com financial_records:", err);
+    const payloads: any[] = [];
+
+    if (launchType === "vale_40" || launchType === "all") {
+      payloads.push({
+        type: "Pagar",
+        description: `Adiantamento Salarial (Vale 40%) - ${emp.name} (${emp.role}) - ${referenceMonth}`,
+        category: "Salários / RH (Vale 40%)",
+        entity_name: emp.name,
+        amount: valeAmount,
+        due_date: dueVale20,
+        status: "Aberto",
+        organization_id: orgId,
+      });
     }
 
-    totalLaunched += totalAmount;
-    count += 1;
+    if (launchType === "saldo_60" || launchType === "all") {
+      payloads.push({
+        type: "Pagar",
+        description: `Saldo de Salário (60%) - ${emp.name} (${emp.role}) - ${referenceMonth}`,
+        category: "Salários / RH (Saldo 60%)",
+        entity_name: emp.name,
+        amount: saldoAmount,
+        due_date: dueSaldo05,
+        status: "Aberto",
+        organization_id: orgId,
+      });
+    }
+
+    for (const p of payloads) {
+      try {
+        const { error } = await supabase.from("financial_records").insert(p);
+        if (error) {
+          console.warn("Aviso ao inserir no financeiro:", error);
+        }
+      } catch (err) {
+        console.warn("Erro ao comunicar com financial_records:", err);
+      }
+      totalLaunched += p.amount;
+      count += 1;
+    }
   }
 
-  return { count, total: totalLaunched };
+  return { count, total: totalLaunched, type: launchType };
 }
 
 // ==============================================================================

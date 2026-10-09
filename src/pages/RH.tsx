@@ -50,6 +50,7 @@ import { useOrganization } from "@/contexts/OrganizationContext";
 import { EmployeeDialog } from "@/components/rh/EmployeeDialog";
 import { VacationDialog } from "@/components/rh/VacationDialog";
 import { OccurrenceDialog } from "@/components/rh/OccurrenceDialog";
+import { PayrollAlertCard } from "@/components/rh/PayrollAlertCard";
 import {
   fetchEmployees,
   upsertEmployee,
@@ -186,13 +187,19 @@ export default function RH() {
   });
 
   const payrollMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (launchType: "vale_40" | "saldo_60" | "all" = "all") => {
       if (!orgId) throw new Error("Selecione uma empresa ativa.");
-      return await launchPayrollToFinancial(employees, referenceMonth, orgId);
+      return await launchPayrollToFinancial(employees, referenceMonth, orgId, launchType);
     },
     onSuccess: (res) => {
+      const label =
+        res.type === "vale_40"
+          ? "Vale de 40% (Dia 20)"
+          : res.type === "saldo_60"
+          ? "Saldo de 60% (Dia 05)"
+          : "Folha completa";
       toast.success(
-        `Folha lançada! ${res.count} pagamentos gerados no Financeiro totalizando ${formatBRL(res.total)}.`
+        `${label} lançada! ${res.count} pagamentos gerados no Financeiro totalizando ${formatBRL(res.total)}.`
       );
       qc.invalidateQueries({ queryKey: ["financial_records"] });
     },
@@ -884,13 +891,26 @@ export default function RH() {
           {/* ============================================================ */}
           {/* ABA 3: FOLHA DE PAGAMENTO & BENEFÍCIOS                       */}
           {/* ============================================================ */}
+          {/* ============================================================ */}
+          {/* ABA 3: FOLHA DE PAGAMENTO & BENEFÍCIOS                       */}
+          {/* ============================================================ */}
           <TabsContent value="folha" className="space-y-4">
+            {/* COMPONENTE DE ALERTAS: VALE 40% (DIA 20) E SALDO 60% (DIA 05) */}
+            <PayrollAlertCard
+              employees={employees}
+              referenceMonth={referenceMonth}
+              onLaunchPayrollPart={async (type) => {
+                await payrollMutation.mutateAsync(type);
+              }}
+              isPending={payrollMutation.isPending}
+            />
+
             <Card className="glass border-border/60">
               <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <CardTitle className="text-lg font-bold">Folha Salarial Mensal</CardTitle>
+                  <CardTitle className="text-lg font-bold">Detalhamento Salarial & Benefícios</CardTitle>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    Consolidação dos vencimentos de colaboradores e envio automático para o Contas a Pagar.
+                    Cálculo individual da folha, adiantamentos e integração direta com o Contas a Pagar.
                   </p>
                 </div>
 
@@ -914,26 +934,26 @@ export default function RH() {
                         disabled={payrollMutation.isPending || activeEmployees.length === 0}
                       >
                         <Wallet className="h-4 w-4" />
-                        {payrollMutation.isPending ? "Lançando..." : "Lançar Folha no Financeiro"}
+                        {payrollMutation.isPending ? "Lançando..." : "Lançar Folha Completa"}
                       </Button>
                     </AlertDialogTrigger>
                     <AlertDialogContent>
                       <AlertDialogHeader>
-                        <AlertDialogTitle>Lançar Folha no Contas a Pagar?</AlertDialogTitle>
+                        <AlertDialogTitle>Lançar Folha Completa no Contas a Pagar?</AlertDialogTitle>
                         <AlertDialogDescription>
                           Esta ação criará os lançamentos de despesa (categoria <strong>Salários / RH</strong>)
                           no módulo Financeiro para <strong>{activeEmployees.length} colaborador(es)</strong>,
                           totalizando <strong>{formatBRL(totalPayrollCost)}</strong> para o mês de{" "}
-                          <strong>{referenceMonth}</strong> com vencimento no 5º dia útil.
+                          <strong>{referenceMonth}</strong> (gerando tanto o Vale no dia 20 quanto o Saldo no dia 05).
                         </AlertDialogDescription>
                       </AlertDialogHeader>
                       <AlertDialogFooter>
                         <AlertDialogCancel>Cancelar</AlertDialogCancel>
                         <AlertDialogAction
-                          onClick={() => payrollMutation.mutate()}
+                          onClick={() => payrollMutation.mutate("all")}
                           className="bg-primary hover:bg-primary/90"
                         >
-                          Confirmar Lançamento
+                          Confirmar Lançamento Completo
                         </AlertDialogAction>
                       </AlertDialogFooter>
                     </AlertDialogContent>
@@ -941,59 +961,137 @@ export default function RH() {
                 </div>
               </CardHeader>
 
-              <div className="flex sm:hidden items-center justify-between px-3 py-2 bg-muted/20 border-b border-border/40 text-[11px] text-muted-foreground">
-                <span className="flex items-center gap-1 font-medium">
-                  ↔️ Arraste para o lado para ver benefícios e Pix
-                </span>
-                <span className="font-semibold">{activeEmployees.length} colaboradores</span>
+              {/* VISÃO MOBILE: CARDS DA FOLHA */}
+              <div className="grid grid-cols-1 gap-2.5 sm:hidden p-4 pt-0">
+                {activeEmployees.length === 0 ? (
+                  <div className="py-8 text-center text-sm text-muted-foreground">
+                    Nenhum colaborador ativo cadastrado para a folha.
+                  </div>
+                ) : (
+                  activeEmployees.map((emp) => {
+                    const salary = Number(emp.base_salary || 0);
+                    const benefits = Number(emp.benefits_total || 0);
+                    const vale = Math.round(salary * 0.40 * 100) / 100;
+                    const saldo = Math.round(salary * 0.60 * 100) / 100 + benefits;
+                    const total = salary + benefits;
+
+                    return (
+                      <div
+                        key={emp.id}
+                        className="flex flex-col gap-2 rounded-xl border border-border/70 bg-card p-3.5 shadow-sm active:bg-muted/30 transition-colors"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            <span className="font-semibold text-sm leading-tight text-foreground truncate block">
+                              {emp.name}
+                            </span>
+                            <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                              <span>{emp.role}</span>
+                              {emp.contract_type && <Badge variant="outline" className="text-[10px] px-1 py-0">{emp.contract_type}</Badge>}
+                            </div>
+                          </div>
+
+                          <div className="text-right shrink-0">
+                            <span className="text-[10px] text-muted-foreground block">Custo Total</span>
+                            <span className="font-black text-sm text-emerald-600 dark:text-emerald-400">
+                              {formatBRL(total)}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Grid dos Pagamentos: Vale 40% vs Saldo 60% */}
+                        <div className="grid grid-cols-2 gap-2 rounded-lg bg-muted/30 p-2 text-xs border border-border/40 mt-1">
+                          <div className="border-r border-border/40 pr-2">
+                            <span className="text-[10px] font-bold text-amber-700 dark:text-amber-400 block">
+                              Vale 40% (Dia 20)
+                            </span>
+                            <span className="font-extrabold text-foreground text-sm">
+                              {formatBRL(vale)}
+                            </span>
+                          </div>
+                          <div className="pl-1">
+                            <span className="text-[10px] font-bold text-primary block">
+                              Saldo 60% (Dia 05)
+                            </span>
+                            <span className="font-extrabold text-foreground text-sm">
+                              {formatBRL(saldo)}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between border-t border-border/40 pt-2 text-[11px] text-muted-foreground">
+                          <span>Salário Base: {formatBRL(salary)}</span>
+                          <span>{emp.pix_key ? `Pix: ${emp.pix_key}` : emp.bank_name || "Sem chave Pix"}</span>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
               </div>
-              <Table containerClassName="lg:max-h-[calc(100dvh-320px)]" className="min-w-[720px] w-full">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Colaborador</TableHead>
-                    <TableHead>Cargo</TableHead>
-                    <TableHead>Regime</TableHead>
-                    <TableHead>Salário Base</TableHead>
-                    <TableHead>Benefícios (VT/VR)</TableHead>
-                    <TableHead>Custo Total Mensal</TableHead>
-                    <TableHead>Chave Pix / Conta</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {activeEmployees.length === 0 ? (
+
+              {/* VISÃO DESKTOP: TABELA DA FOLHA */}
+              <div className="hidden sm:block">
+                <Table containerClassName="lg:max-h-[calc(100dvh-320px)]" className="w-full">
+                  <TableHeader>
                     <TableRow>
-                      <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
-                        Nenhum colaborador ativo cadastrado para a folha.
-                      </TableCell>
+                      <TableHead>Colaborador</TableHead>
+                      <TableHead>Cargo</TableHead>
+                      <TableHead>Regime</TableHead>
+                      <TableHead>Salário Base</TableHead>
+                      <TableHead className="text-amber-600 dark:text-amber-400 font-bold">Vale 40% (Dia 20)</TableHead>
+                      <TableHead className="text-primary font-bold">Saldo 60% (Dia 05)</TableHead>
+                      <TableHead>Benefícios</TableHead>
+                      <TableHead>Custo Total</TableHead>
+                      <TableHead>Chave Pix / Conta</TableHead>
                     </TableRow>
-                  ) : (
-                    activeEmployees.map((emp) => {
-                      const total = Number(emp.base_salary || 0) + Number(emp.benefits_total || 0);
-                      return (
-                        <TableRow key={emp.id}>
-                          <TableCell className="font-semibold">{emp.name}</TableCell>
-                          <TableCell>{emp.role}</TableCell>
-                          <TableCell>
-                            <Badge variant="outline">{emp.contract_type}</Badge>
-                          </TableCell>
-                          <TableCell className="font-medium">
-                            {formatBRL(Number(emp.base_salary || 0))}
-                          </TableCell>
-                          <TableCell className="text-muted-foreground">
-                            {formatBRL(Number(emp.benefits_total || 0))}
-                          </TableCell>
-                          <TableCell className="font-black text-emerald-600 dark:text-emerald-400">
-                            {formatBRL(total)}
-                          </TableCell>
-                          <TableCell className="text-xs text-muted-foreground">
-                            {emp.pix_key ? `Pix: ${emp.pix_key}` : emp.bank_name || "—"}
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })
-                  )}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {activeEmployees.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={9} className="py-8 text-center text-muted-foreground">
+                          Nenhum colaborador ativo cadastrado para a folha.
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      activeEmployees.map((emp) => {
+                        const salary = Number(emp.base_salary || 0);
+                        const benefits = Number(emp.benefits_total || 0);
+                        const vale = Math.round(salary * 0.40 * 100) / 100;
+                        const saldo = Math.round(salary * 0.60 * 100) / 100 + benefits;
+                        const total = salary + benefits;
+
+                        return (
+                          <TableRow key={emp.id} className="odd:bg-muted/15">
+                            <TableCell className="font-semibold">{emp.name}</TableCell>
+                            <TableCell>{emp.role}</TableCell>
+                            <TableCell>
+                              <Badge variant="outline">{emp.contract_type}</Badge>
+                            </TableCell>
+                            <TableCell className="font-medium">
+                              {formatBRL(salary)}
+                            </TableCell>
+                            <TableCell className="font-extrabold text-amber-600 dark:text-amber-400">
+                              {formatBRL(vale)}
+                            </TableCell>
+                            <TableCell className="font-extrabold text-primary">
+                              {formatBRL(saldo)}
+                            </TableCell>
+                            <TableCell className="text-muted-foreground">
+                              {formatBRL(benefits)}
+                            </TableCell>
+                            <TableCell className="font-black text-emerald-600 dark:text-emerald-400">
+                              {formatBRL(total)}
+                            </TableCell>
+                            <TableCell className="text-xs text-muted-foreground">
+                              {emp.pix_key ? `Pix: ${emp.pix_key}` : emp.bank_name || "—"}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
             </Card>
           </TabsContent>
 
