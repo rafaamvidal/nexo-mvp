@@ -315,13 +315,13 @@ export default function RH() {
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
             <Button
               type="button"
               variant="outline"
               onClick={handleExportCsv}
               disabled={employees.length === 0}
-              className="gap-2"
+              className="flex-1 gap-2 sm:flex-none"
             >
               <Download className="h-4 w-4" />
               Exportar CSV
@@ -333,7 +333,7 @@ export default function RH() {
                 variant="outline"
                 onClick={() => seedMutation.mutate()}
                 disabled={seedMutation.isPending}
-                className="gap-2 border-primary/30 text-primary hover:bg-primary/10"
+                className="flex-1 gap-2 border-primary/30 text-primary hover:bg-primary/10 sm:flex-none"
               >
                 <Sparkles className="h-4 w-4" />
                 {seedMutation.isPending ? "Carregando..." : "Carregar Equipe Exemplo"}
@@ -430,12 +430,12 @@ export default function RH() {
 
         {/* ABAS DO MÓDULO */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 sm:w-[560px]">
-            <TabsTrigger value="colaboradores" className="gap-2 text-xs">
+          <TabsList className="grid h-auto w-full grid-cols-2 gap-1 p-1 sm:w-[560px] sm:grid-cols-4">
+            <TabsTrigger value="colaboradores" className="gap-2 py-2 text-xs">
               <Users className="h-3.5 w-3.5" />
               Colaboradores
             </TabsTrigger>
-            <TabsTrigger value="ferias" className="gap-2 text-xs">
+            <TabsTrigger value="ferias" className="gap-2 py-2 text-xs">
               <Palmtree className="h-3.5 w-3.5" />
               Férias
               {overdueVacationsCount > 0 && (
@@ -444,11 +444,11 @@ export default function RH() {
                 </Badge>
               )}
             </TabsTrigger>
-            <TabsTrigger value="folha" className="gap-2 text-xs">
+            <TabsTrigger value="folha" className="gap-2 py-2 text-xs">
               <Wallet className="h-3.5 w-3.5" />
               Folha & Salários
             </TabsTrigger>
-            <TabsTrigger value="ocorrencias" className="gap-2 text-xs">
+            <TabsTrigger value="ocorrencias" className="gap-2 py-2 text-xs">
               <Clock className="h-3.5 w-3.5" />
               Ocorrências
             </TabsTrigger>
@@ -505,7 +505,13 @@ export default function RH() {
             </div>
 
             <Card className="glass overflow-hidden border-border/60">
-              <Table>
+              <div className="flex sm:hidden items-center justify-between px-3 py-2 bg-muted/20 border-b border-border/40 text-[11px] text-muted-foreground">
+                <span className="flex items-center gap-1 font-medium">
+                  ↔️ Arraste para o lado para ver detalhes e ações
+                </span>
+                <span className="font-semibold">{filteredEmployees.length} colaboradores</span>
+              </div>
+              <Table containerClassName="lg:max-h-[calc(100dvh-320px)]" className="min-w-[760px] w-full">
                 <TableHeader>
                   <TableRow>
                     <TableHead>Colaborador</TableHead>
@@ -695,7 +701,13 @@ export default function RH() {
                     }}
                   />
                 </CardHeader>
-                <Table>
+                <div className="flex sm:hidden items-center justify-between px-3 py-2 bg-muted/20 border-b border-border/40 text-[11px] text-muted-foreground">
+                  <span className="flex items-center gap-1 font-medium">
+                    ↔️ Arraste para o lado para ver período e ações
+                  </span>
+                  <span className="font-semibold">{vacations.length} agendamentos</span>
+                </div>
+                <Table containerClassName="lg:max-h-[calc(100dvh-320px)]" className="min-w-[680px] w-full">
                   <TableHeader>
                     <TableRow>
                       <TableHead>Colaborador</TableHead>
@@ -831,7 +843,13 @@ export default function RH() {
                 </div>
               </CardHeader>
 
-              <Table>
+              <div className="flex sm:hidden items-center justify-between px-3 py-2 bg-muted/20 border-b border-border/40 text-[11px] text-muted-foreground">
+                <span className="flex items-center gap-1 font-medium">
+                  ↔️ Arraste para o lado para ver benefícios e Pix
+                </span>
+                <span className="font-semibold">{activeEmployees.length} colaboradores</span>
+              </div>
+              <Table containerClassName="lg:max-h-[calc(100dvh-320px)]" className="min-w-[720px] w-full">
                 <TableHeader>
                   <TableRow>
                     <TableHead>Colaborador</TableHead>
@@ -902,7 +920,13 @@ export default function RH() {
             </div>
 
             <Card className="glass overflow-hidden border-border/60">
-              <Table>
+              <div className="flex sm:hidden items-center justify-between px-3 py-2 bg-muted/20 border-b border-border/40 text-[11px] text-muted-foreground">
+                <span className="flex items-center gap-1 font-medium">
+                  ↔️ Arraste para o lado para ver motivo e ação
+                </span>
+                <span className="font-semibold">{occurrences.length} ocorrências</span>
+              </div>
+              <Table containerClassName="lg:max-h-[calc(100dvh-320px)]" className="min-w-[700px] w-full">
                 <TableHeader>
                   <TableRow>
                     <TableHead>Data</TableHead>

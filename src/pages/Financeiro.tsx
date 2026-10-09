@@ -634,13 +634,13 @@ export default function Financeiro() {
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
             <Button
               type="button"
               variant="outline"
               onClick={handleExportCsv}
               disabled={filtered.length === 0}
-              className="gap-2"
+              className="flex-1 gap-2 sm:flex-none"
             >
               <Download className="h-4 w-4" />
               Exportar CSV
@@ -648,14 +648,14 @@ export default function Financeiro() {
 
             <Dialog open={open} onOpenChange={setOpen}>
               <DialogTrigger asChild>
-                <Button type="button" variant="hero" className="gap-2">
+                <Button type="button" variant="hero" className="flex-1 gap-2 sm:flex-none">
                   <Plus className="h-4 w-4" />
                   Novo Lançamento
                 </Button>
               </DialogTrigger>
-            <DialogContent className="sm:max-w-lg">
+            <DialogContent className="w-[calc(100%-2rem)] max-h-[90dvh] overflow-y-auto rounded-lg p-5 sm:max-w-lg sm:p-6">
               <DialogHeader>
-                <DialogTitle>Novo Lançamento Financeiro</DialogTitle>
+                <DialogTitle className="truncate pr-6 text-left leading-snug">Novo Lançamento Financeiro</DialogTitle>
               </DialogHeader>
 
               <div className="grid gap-4 py-2">
@@ -994,20 +994,20 @@ export default function Financeiro() {
         </div>
 
         <Tabs value={mainTab} onValueChange={setMainTab} className="mt-6">
-          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 sm:w-[620px]">
-            <TabsTrigger value="extrato" className="gap-2 text-xs">
+          <TabsList className="grid h-auto w-full grid-cols-2 gap-1 p-1 sm:w-[620px] sm:grid-cols-4">
+            <TabsTrigger value="extrato" className="gap-2 py-2 text-xs">
               <Wallet className="h-4 w-4" />
               Lançamentos
             </TabsTrigger>
-            <TabsTrigger value="categorias" className="gap-2 text-xs">
+            <TabsTrigger value="categorias" className="gap-2 py-2 text-xs">
               <PieChart className="h-4 w-4" />
-              Gastos por Categoria
+              Categorias
             </TabsTrigger>
-            <TabsTrigger value="dre" className="gap-2 text-xs">
+            <TabsTrigger value="dre" className="gap-2 py-2 text-xs">
               <BarChart3 className="h-4 w-4" />
               DRE Gerencial
             </TabsTrigger>
-            <TabsTrigger value="fluxo" className="gap-2 text-xs">
+            <TabsTrigger value="fluxo" className="gap-2 py-2 text-xs">
               <TrendingUp className="h-4 w-4" />
               Fluxo Projetado
             </TabsTrigger>
@@ -1120,7 +1120,7 @@ export default function Financeiro() {
                 </span>
                 <span className="font-semibold">{filtered.length} títulos</span>
               </div>
-              <Table containerClassName="max-h-[68vh]" className="min-w-[760px] w-full">
+              <Table containerClassName="lg:max-h-[calc(100dvh-320px)]" className="min-w-[760px] w-full">
                 <TableHeader>
                   <TableRow>
                     <TableHead>Vencimento</TableHead>
@@ -1515,7 +1515,7 @@ export default function Financeiro() {
                   ↔️ Arraste para ver colunas
                 </span>
               </div>
-              <Table containerClassName="max-h-[380px]" className="min-w-[620px] w-full">
+              <Table containerClassName="lg:max-h-[380px]" className="min-w-[620px] w-full">
                 <TableHeader>
                   <TableRow>
                     <TableHead>Vencimento</TableHead>

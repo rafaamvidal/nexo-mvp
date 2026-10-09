@@ -297,7 +297,7 @@ export default function Relatorios() {
                   </div>
                 </div>
               ) : (
-                <Table>
+                <Table containerClassName="lg:max-h-[calc(100dvh-320px)]">
                   <TableHeader>
                     <TableRow>
                       <TableHead>#</TableHead>

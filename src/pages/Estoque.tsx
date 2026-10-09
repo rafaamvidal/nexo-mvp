@@ -327,7 +327,7 @@ export default function Estoque() {
                         </span>
                         <span className="font-semibold">{criticalItems.length} itens</span>
                       </div>
-                      <Table containerClassName="max-h-[460px]" className="min-w-[780px] w-full">
+                      <Table containerClassName="lg:max-h-[calc(100dvh-320px)]" className="min-w-[780px] w-full">
                         <TableHeader>
                           <TableRow>
                             <TableHead>Produto</TableHead>

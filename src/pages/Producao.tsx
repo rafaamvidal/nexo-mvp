@@ -395,11 +395,11 @@ export default function Producao() {
               <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar produto/status…" className="pl-9" />
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
               <Button
                 type="button"
                 variant="outline"
-                className="gap-2"
+                className="flex-1 gap-2 sm:flex-none"
                 onClick={handleExportCsv}
                 disabled={!filtered || filtered.length === 0}
               >
@@ -411,14 +411,14 @@ export default function Producao() {
 
               <Dialog open={open} onOpenChange={setOpen}>
                 <DialogTrigger asChild>
-                  <Button type="button" variant="hero" className="gap-2">
+                  <Button type="button" variant="hero" className="w-full gap-2 sm:w-auto">
                     <Plus className="h-4 w-4" />
                     Nova Ordem
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="sm:max-w-lg">
+                <DialogContent className="w-[calc(100%-2rem)] max-h-[90dvh] overflow-y-auto rounded-lg p-5 sm:max-w-lg sm:p-6">
                   <DialogHeader>
-                    <DialogTitle>Nova Ordem de Fabricação</DialogTitle>
+                    <DialogTitle className="truncate pr-6 text-left leading-snug">Nova Ordem de Fabricação</DialogTitle>
                   </DialogHeader>
                   <div className="grid gap-4">
                     <div className="grid gap-2">
@@ -491,9 +491,9 @@ export default function Producao() {
             </div>
 
             <Dialog open={editOpen} onOpenChange={setEditOpen}>
-              <DialogContent className="sm:max-w-lg">
+              <DialogContent className="w-[calc(100%-2rem)] max-h-[90dvh] overflow-y-auto rounded-lg p-5 sm:max-w-lg sm:p-6">
                 <DialogHeader>
-                  <DialogTitle>Editar Ordem</DialogTitle>
+                  <DialogTitle className="truncate pr-6 text-left leading-snug">Editar Ordem</DialogTitle>
                 </DialogHeader>
                 {editing && (
                   <div className="grid gap-4">
@@ -556,7 +556,7 @@ export default function Producao() {
                 </span>
                 <span className="font-semibold">{(filtered ?? []).length} ordens</span>
               </div>
-              <Table containerClassName="max-h-[70vh]" className="min-w-[820px] w-full">
+              <Table containerClassName="lg:max-h-[calc(100dvh-320px)]" className="min-w-[820px] w-full">
                 <TableHeader>
                   <TableRow>
                     <TableHead>Data</TableHead>

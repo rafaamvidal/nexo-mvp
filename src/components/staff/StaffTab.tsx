@@ -90,9 +90,9 @@ function UserProfileDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="w-[calc(100%-2rem)] max-h-[90dvh] overflow-y-auto rounded-lg p-5 sm:max-w-lg sm:p-6">
         <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
+          <DialogTitle className="truncate pr-6 text-left leading-snug">{title}</DialogTitle>
         </DialogHeader>
         <div className="grid gap-4">
           <div className="grid gap-2">
@@ -281,8 +281,8 @@ export function StaffTab() {
 
   return (
     <div className="grid gap-4">
-      <Card className="glass p-6">
-        <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+      <Card className="glass p-4 sm:p-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <div className="inline-flex items-center gap-2 text-sm font-semibold">
               <Users className="h-4 w-4 text-muted-foreground" />
@@ -293,7 +293,7 @@ export function StaffTab() {
           <UserProfileDialog
             title="Novo Usuário / Staff"
             trigger={
-              <Button type="button" variant="hero" className="gap-2">
+              <Button type="button" variant="hero" className="w-full gap-2 sm:w-auto">
                 <Plus className="h-4 w-4" />
                 Novo
               </Button>
@@ -325,7 +325,7 @@ export function StaffTab() {
             </span>
             <span className="font-semibold">{(allowlistUsers ?? []).length} usuários</span>
           </div>
-          <Table className="min-w-[620px] w-full">
+          <Table containerClassName="lg:max-h-[calc(100dvh-320px)]" className="min-w-[620px] w-full">
             <TableHeader>
               <TableRow>
                 <TableHead>Nome</TableHead>

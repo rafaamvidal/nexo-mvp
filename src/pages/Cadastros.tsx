@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, Mail, MapPin, MessageCircle, Package, Pencil, Phone, Plus, Search, Trash2, User, Users } from "lucide-react";
+import { Loader2, Mail, MapPin, MessageCircle, Package, Pencil, Phone, Plus, Search, Trash2, Truck, User, UserCog, Users } from "lucide-react";
 
 import { AppShell } from "@/components/layout/AppShell";
 import { Button } from "@/components/ui/button";
@@ -167,9 +167,9 @@ function EntityDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
+      <DialogContent className="w-[calc(100%-2rem)] max-h-[90dvh] overflow-y-auto rounded-lg p-5 sm:max-w-xl sm:p-6">
         <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
+          <DialogTitle className="truncate pr-6 text-left leading-snug">{title}</DialogTitle>
         </DialogHeader>
         <div className="grid gap-4 py-2">
           {/* Dados Principais */}
@@ -515,14 +515,14 @@ export default function Cadastros() {
               Gestão de clientes, fornecedores e equipe com busca automática e integração WhatsApp.
             </p>
           </div>
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+          <div className="flex w-full flex-col items-stretch gap-2 sm:flex-row sm:items-center md:w-auto">
             <SpreadsheetDataImporter />
             <div className="relative w-full sm:w-[320px]">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
-                placeholder="Buscar por nome, documento, produto fornecido, cidade…"
+                placeholder="Buscar nome, documento, cidade…"
                 className="pl-9"
               />
             </div>
@@ -530,57 +530,72 @@ export default function Cadastros() {
         </div>
 
         <div className="mt-5">
-          <Card className="glass rounded-xl border border-border/60 p-3">
-            <Tabs value={tab} onValueChange={setTab}>
-              <TabsList className={"grid w-full " + (isAdmin ? "grid-cols-3" : "grid-cols-2")}>
-                <TabsTrigger value="clientes">Clientes</TabsTrigger>
-                <TabsTrigger value="fornecedores">Fornecedores</TabsTrigger>
-                {isAdmin && <TabsTrigger value="usuarios">Usuários / Staff</TabsTrigger>}
-              </TabsList>
+          <Tabs value={tab} onValueChange={setTab}>
+            <TabsList
+              className={
+                "grid h-auto w-full grid-cols-1 gap-1 p-1 " +
+                (isAdmin ? "sm:w-[520px] sm:grid-cols-3" : "sm:w-[360px] sm:grid-cols-2")
+              }
+            >
+              <TabsTrigger value="clientes" className="gap-2 py-2 text-xs">
+                <Users className="h-4 w-4" />
+                Clientes
+              </TabsTrigger>
+              <TabsTrigger value="fornecedores" className="gap-2 py-2 text-xs">
+                <Truck className="h-4 w-4" />
+                Fornecedores
+              </TabsTrigger>
+              {isAdmin && (
+                <TabsTrigger value="usuarios" className="gap-2 py-2 text-xs">
+                  <UserCog className="h-4 w-4" />
+                  Usuários / Staff
+                </TabsTrigger>
+              )}
+            </TabsList>
 
-              {/* ABA CLIENTES */}
-              <TabsContent value="clientes" className="mt-4">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div className="inline-flex items-center gap-2 text-sm font-semibold">
-                    <Users className="h-4 w-4 text-muted-foreground" />
-                    Clientes Cadastrados ({filteredClients.length})
-                  </div>
-                  <EntityDialog
-                    title="Novo Cliente"
-                    isClient={true}
-                    trigger={
-                      <Button type="button" variant="hero" className="gap-2">
-                        <Plus className="h-4 w-4" />
-                        Novo Cliente
-                      </Button>
-                    }
-                    onSave={async (payload) => upsertClient.mutateAsync(payload)}
-                  />
+            {/* ABA CLIENTES */}
+            <TabsContent value="clientes" className="mt-5">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="inline-flex items-center gap-2 text-sm font-semibold">
+                  <Users className="h-4 w-4 text-muted-foreground" />
+                  Clientes Cadastrados ({filteredClients.length})
                 </div>
+                <EntityDialog
+                  title="Novo Cliente"
+                  isClient={true}
+                  trigger={
+                    <Button type="button" variant="hero" className="w-full gap-2 sm:w-auto">
+                      <Plus className="h-4 w-4" />
+                      Novo Cliente
+                    </Button>
+                  }
+                  onSave={async (payload) => upsertClient.mutateAsync(payload)}
+                />
+              </div>
 
-                {errClients && (
-                  <Card className="glass mt-4 p-6">
-                    <p className="text-sm text-muted-foreground">Erro: {(errClients as any)?.message ?? ""}</p>
-                  </Card>
-                )}
+              {errClients && (
+                <Card className="glass mt-4 p-6">
+                  <p className="text-sm text-muted-foreground">Erro: {(errClients as any)?.message ?? ""}</p>
+                </Card>
+              )}
 
-                {loadingClients && (
-                  <div className="mt-4 grid gap-3">
-                    {Array.from({ length: 6 }).map((_, i) => (
-                      <Skeleton key={i} className="h-14 rounded-xl" />
-                    ))}
+              {loadingClients && (
+                <div className="mt-4 grid gap-3">
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <Skeleton key={i} className="h-14 rounded-xl" />
+                  ))}
+                </div>
+              )}
+
+              {!loadingClients && !errClients && (
+                <Card className="glass mt-4 overflow-hidden rounded-xl border border-border/60">
+                  <div className="flex sm:hidden items-center justify-between px-3 py-2 bg-muted/20 border-b border-border/40 text-[11px] text-muted-foreground">
+                    <span className="flex items-center gap-1 font-medium">
+                      ↔️ Arraste para o lado para ver contatos e ações
+                    </span>
+                    <span className="font-semibold">{filteredClients.length} clientes</span>
                   </div>
-                )}
-
-                {!loadingClients && !errClients && (
-                  <Card className="glass mt-4 overflow-hidden rounded-xl border border-border/60">
-                    <div className="flex sm:hidden items-center justify-between px-3 py-2 bg-muted/20 border-b border-border/40 text-[11px] text-muted-foreground">
-                      <span className="flex items-center gap-1 font-medium">
-                        ↔️ Arraste para o lado para ver contatos e ações
-                      </span>
-                      <span className="font-semibold">{filteredClients.length} clientes</span>
-                    </div>
-                    <Table containerClassName="max-h-[70vh]" className="min-w-[700px] w-full">
+                  <Table containerClassName="lg:max-h-[calc(100dvh-320px)]" className="min-w-[700px] w-full">
                       <TableHeader>
                         <TableRow>
                           <TableHead>Nome</TableHead>
@@ -690,17 +705,17 @@ export default function Cadastros() {
               </TabsContent>
 
               {/* ABA FORNECEDORES */}
-              <TabsContent value="fornecedores" className="mt-4">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <TabsContent value="fornecedores" className="mt-5">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="inline-flex items-center gap-2 text-sm font-semibold">
-                    <Users className="h-4 w-4 text-muted-foreground" />
+                    <Truck className="h-4 w-4 text-muted-foreground" />
                     Fornecedores Cadastrados ({filteredSuppliers.length})
                   </div>
                   <EntityDialog
                     title="Novo Fornecedor"
                     isClient={false}
                     trigger={
-                      <Button type="button" variant="hero" className="gap-2">
+                      <Button type="button" variant="hero" className="w-full gap-2 sm:w-auto">
                         <Plus className="h-4 w-4" />
                         Novo Fornecedor
                       </Button>
@@ -731,7 +746,7 @@ export default function Cadastros() {
                       </span>
                       <span className="font-semibold">{filteredSuppliers.length} fornecedores</span>
                     </div>
-                    <Table containerClassName="max-h-[70vh]" className="min-w-[720px] w-full">
+                    <Table containerClassName="lg:max-h-[calc(100dvh-320px)]" className="min-w-[720px] w-full">
                       <TableHeader>
                         <TableRow>
                           <TableHead>Nome / Fornecedor</TableHead>
@@ -862,12 +877,11 @@ export default function Cadastros() {
               </TabsContent>
 
               {isAdmin && (
-                <TabsContent value="usuarios" className="mt-4">
+                <TabsContent value="usuarios" className="mt-5">
                   <StaffTab />
                 </TabsContent>
               )}
             </Tabs>
-          </Card>
         </div>
       </section>
     </AppShell>

@@ -190,7 +190,14 @@ export default function Custos() {
                   Nenhum “Produto Final” ativo encontrado.
                 </div>
               ) : (
-                <Table>
+                <>
+                  <div className="flex sm:hidden items-center justify-between px-3 py-2 bg-muted/20 border-b border-border/40 text-[11px] text-muted-foreground -mx-6 -mt-2 mb-2">
+                    <span className="flex items-center gap-1 font-medium">
+                      ↔️ Arraste para o lado para ver margens e ações
+                    </span>
+                    <span className="font-semibold">{rows.length} produtos</span>
+                  </div>
+                  <Table containerClassName="lg:max-h-[calc(100dvh-320px)]" className="min-w-[680px] w-full">
                   <TableHeader>
                     <TableRow>
                       <TableHead>Produto</TableHead>
@@ -232,15 +239,16 @@ export default function Custos() {
                     })}
                   </TableBody>
                 </Table>
+                </>
               )}
             </CardContent>
           </Card>
         </div>
 
         <Dialog open={!!editing} onOpenChange={(o) => (!o ? setEditing(null) : null)}>
-          <DialogContent className="sm:max-w-md">
+          <DialogContent className="w-[calc(100%-2rem)] max-h-[90dvh] overflow-y-auto rounded-lg p-5 sm:max-w-md sm:p-6">
             <DialogHeader>
-              <DialogTitle>Editar custo e preço</DialogTitle>
+              <DialogTitle className="truncate pr-6 text-left leading-snug">Editar custo e preço</DialogTitle>
             </DialogHeader>
             <div className="grid gap-4">
               <div className="rounded-lg border border-border/60 bg-card/40 p-3">

@@ -124,11 +124,11 @@ export function VacationDialog({
         </DialogTrigger>
       )}
 
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="w-[calc(100%-2rem)] max-h-[90dvh] overflow-y-auto rounded-lg p-5 sm:max-w-md sm:p-6">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Palmtree className="h-5 w-5 text-primary" />
-            <span>{initial?.id ? "Editar Período de Férias" : "Agendar Férias do Colaborador"}</span>
+          <DialogTitle className="flex items-center gap-2 truncate pr-6 text-left leading-snug">
+            <Palmtree className="h-5 w-5 shrink-0 text-primary" />
+            <span className="truncate">{initial?.id ? "Editar Férias" : "Agendar Férias"}</span>
           </DialogTitle>
         </DialogHeader>
 

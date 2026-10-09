@@ -238,7 +238,7 @@ export function StockMovementsHistory() {
             </span>
             <span className="font-semibold">{filtered.length} movimentações</span>
           </div>
-          <Table containerClassName="max-h-[65vh]" className="min-w-[680px] w-full">
+          <Table containerClassName="lg:max-h-[calc(100dvh-320px)]" className="min-w-[680px] w-full">
             <TableHeader>
                 <TableRow>
                   <TableHead className="w-[150px]">Data / Hora</TableHead>

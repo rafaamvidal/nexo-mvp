@@ -573,14 +573,14 @@ export default function Compras() {
 
             <Dialog open={open} onOpenChange={setOpen}>
               <DialogTrigger asChild>
-                <Button type="button" variant="hero" className="gap-2">
+                <Button type="button" variant="hero" className="w-full gap-2 sm:w-auto">
                   <Plus className="h-4 w-4" />
                   Novo Pedido
                 </Button>
               </DialogTrigger>
-              <DialogContent className="sm:max-w-2xl">
+              <DialogContent className="w-[calc(100%-2rem)] max-h-[90dvh] overflow-y-auto rounded-lg p-5 sm:max-w-2xl sm:p-6">
                 <DialogHeader>
-                  <DialogTitle>Novo Pedido de Compra</DialogTitle>
+                  <DialogTitle className="truncate pr-6 text-left leading-snug">Novo Pedido de Compra</DialogTitle>
                 </DialogHeader>
 
                 <div className="grid gap-4">
@@ -750,9 +750,9 @@ export default function Compras() {
             </Dialog>
 
             <Dialog open={editOpen} onOpenChange={setEditOpen}>
-              <DialogContent className="sm:max-w-2xl">
+              <DialogContent className="w-[calc(100%-2rem)] max-h-[90dvh] overflow-y-auto rounded-lg p-5 sm:max-w-2xl sm:p-6">
                 <DialogHeader>
-                  <DialogTitle>Editar Pedido de Compra</DialogTitle>
+                  <DialogTitle className="truncate pr-6 text-left leading-snug">Editar Pedido de Compra</DialogTitle>
                 </DialogHeader>
 
                 {editing && (
@@ -1002,7 +1002,7 @@ export default function Compras() {
                 </span>
                 <span className="font-semibold">{(filtered ?? []).length} pedidos</span>
               </div>
-              <Table containerClassName="max-h-[70vh]" className="min-w-[720px] w-full">
+              <Table containerClassName="lg:max-h-[calc(100dvh-320px)]" className="min-w-[720px] w-full">
                 <TableHeader>
                     <TableRow>
                       <TableHead>Data</TableHead>

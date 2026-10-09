@@ -495,30 +495,31 @@ export default function Vendas() {
             <p className="mt-1 text-sm text-muted-foreground">Lista de vendas (Orçamento, Pedido, Faturado) e criação rápida.</p>
           </div>
 
-          <div className="relative w-full md:w-[360px]">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar cliente/status…" className="pl-9" />
-          </div>
+          <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center md:w-auto">
+            <div className="relative w-full md:w-[320px]">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar cliente/status…" className="pl-9" />
+            </div>
 
-          <div className="flex items-center gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={handleExportCsv}
-              disabled={(filtered ?? []).length === 0}
-              className="gap-2"
-            >
-              <Download className="h-4 w-4" />
-              Exportar CSV
-            </Button>
+            <div className="flex w-full items-center gap-2 sm:w-auto">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleExportCsv}
+                disabled={(filtered ?? []).length === 0}
+                className="flex-1 gap-2 sm:flex-none"
+              >
+                <Download className="h-4 w-4" />
+                Exportar CSV
+              </Button>
 
-            <Sheet open={open} onOpenChange={setOpen}>
-              <SheetTrigger asChild>
-                <Button type="button" variant="hero" className="gap-2" onClick={openForCreate}>
-                  <Plus className="h-4 w-4" />
-                  Nova Venda
-                </Button>
-              </SheetTrigger>
+              <Sheet open={open} onOpenChange={setOpen}>
+                <SheetTrigger asChild>
+                  <Button type="button" variant="hero" className="flex-1 gap-2 sm:flex-none" onClick={openForCreate}>
+                    <Plus className="h-4 w-4" />
+                    Nova Venda
+                  </Button>
+                </SheetTrigger>
             <SheetContent side="right" className="w-full sm:max-w-2xl overflow-y-auto">
               <SheetHeader>
                 <SheetTitle>{editingSaleId ? "Editar Venda" : "Nova Venda"}</SheetTitle>
@@ -799,7 +800,7 @@ export default function Vendas() {
                 </span>
                 <span className="font-semibold">{(filtered ?? []).length} vendas</span>
               </div>
-              <Table containerClassName="max-h-[70vh]" className="min-w-[680px] w-full">
+              <Table containerClassName="lg:max-h-[calc(100dvh-320px)]" className="min-w-[680px] w-full">
                 <TableHeader>
                   <TableRow>
                     <TableHead>Data</TableHead>

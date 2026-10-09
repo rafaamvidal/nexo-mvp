@@ -190,17 +190,17 @@ export function EmployeeDialog({
         </DialogTrigger>
       )}
 
-      <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-2xl">
+      <DialogContent className="w-[calc(100%-2rem)] max-h-[90dvh] overflow-y-auto rounded-lg p-5 sm:max-w-2xl sm:p-6">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <User className="h-5 w-5 text-primary" />
-            <span>{title || (initial?.id ? "Editar Colaborador" : "Cadastrar Colaborador")}</span>
+          <DialogTitle className="flex items-center gap-2 truncate pr-6 text-left leading-snug">
+            <User className="h-5 w-5 shrink-0 text-primary" />
+            <span className="truncate">{title || (initial?.id ? "Editar Colaborador" : "Cadastrar Colaborador")}</span>
           </DialogTitle>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4 pt-2">
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="grid w-full grid-cols-4">
+            <TabsList className="grid h-auto w-full grid-cols-2 gap-1 p-1 sm:grid-cols-4">
               <TabsTrigger value="pessoal" className="gap-1.5 text-xs">
                 <User className="h-3.5 w-3.5" />
                 Pessoal

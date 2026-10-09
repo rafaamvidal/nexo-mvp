@@ -89,11 +89,11 @@ export function OccurrenceDialog({
         </DialogTrigger>
       )}
 
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="w-[calc(100%-2rem)] max-h-[90dvh] overflow-y-auto rounded-lg p-5 sm:max-w-md sm:p-6">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <AlertCircle className="h-5 w-5 text-primary" />
-            <span>Registrar Ocorrência / Ponto</span>
+          <DialogTitle className="flex items-center gap-2 truncate pr-6 text-left leading-snug">
+            <AlertCircle className="h-5 w-5 shrink-0 text-primary" />
+            <span className="truncate">Registrar Ocorrência / Ponto</span>
           </DialogTitle>
         </DialogHeader>
 
