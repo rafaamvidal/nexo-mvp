@@ -504,14 +504,112 @@ export default function RH() {
               </div>
             </div>
 
-            <Card className="glass overflow-hidden border-border/60">
-              <div className="flex sm:hidden items-center justify-between px-3 py-2 bg-muted/20 border-b border-border/40 text-[11px] text-muted-foreground">
-                <span className="flex items-center gap-1 font-medium">
-                  ↔️ Arraste para o lado para ver detalhes e ações
-                </span>
-                <span className="font-semibold">{filteredEmployees.length} colaboradores</span>
-              </div>
-              <Table containerClassName="lg:max-h-[calc(100dvh-320px)]" className="min-w-[760px] w-full">
+            {/* VISÃO MOBILE: CARDS NATIVOS DE COLABORADORES */}
+            <div className="grid grid-cols-1 gap-2.5 sm:hidden">
+              {loadingEmployees ? (
+                Array.from({ length: 4 }).map((_, i) => (
+                  <Skeleton key={i} className="h-24 w-full rounded-xl" />
+                ))
+              ) : filteredEmployees.length === 0 ? (
+                <Card className="glass p-6 text-center text-sm text-muted-foreground">
+                  Nenhum colaborador encontrado. Clique em "Novo Colaborador" para cadastrar.
+                </Card>
+              ) : (
+                filteredEmployees.map((emp) => (
+                  <div
+                    key={emp.id}
+                    className="flex flex-col gap-2 rounded-xl border border-border/70 bg-card p-3.5 shadow-sm active:bg-muted/30 transition-colors"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <div className="font-semibold text-sm leading-tight text-foreground truncate">
+                          {emp.name}
+                        </div>
+                        <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                          <span className="font-medium text-foreground">{emp.role}</span>
+                          {emp.department && <span>• {emp.department}</span>}
+                          {emp.contract_type && <Badge variant="secondary" className="text-[10px] px-1 py-0">{emp.contract_type}</Badge>}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1 shrink-0">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                          onClick={() => handleEditEmployee(emp)}
+                          title="Editar Colaborador"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-destructive/80 hover:text-destructive"
+                              title="Excluir Colaborador"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Excluir colaborador?</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Deseja realmente remover o registro de <strong>{emp.name}</strong>?
+                                Esta ação não poderá ser desfeita.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={() => deleteEmployeeMutation.mutate(emp.id)}
+                                className="bg-destructive hover:bg-destructive/90"
+                              >
+                                Excluir
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between border-t border-border/40 pt-2 text-xs">
+                      <div>
+                        {emp.status === "Ativo" ? (
+                          <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 text-[10px] px-1.5 py-0">
+                            Ativo
+                          </Badge>
+                        ) : emp.status === "Em Férias" ? (
+                          <Badge className="bg-amber-500/15 text-amber-700 dark:text-amber-300 text-[10px] px-1.5 py-0">
+                            Em Férias
+                          </Badge>
+                        ) : emp.status === "Afastado" ? (
+                          <Badge variant="secondary" className="text-[10px] px-1.5 py-0">Afastado</Badge>
+                        ) : (
+                          <Badge variant="destructive" className="text-[10px] px-1.5 py-0">Desligado</Badge>
+                        )}
+                      </div>
+
+                      <div className="text-right">
+                        <span className="text-[11px] text-muted-foreground mr-1.5">Salário:</span>
+                        <span className="font-bold text-foreground">
+                          {formatBRL(Number(emp.base_salary || 0))}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* VISÃO DESKTOP: TABELA COMPLETA */}
+            <Card className="glass hidden sm:block overflow-hidden border-border/60">
+              <Table containerClassName="lg:max-h-[calc(100dvh-320px)]" className="w-full">
                 <TableHeader>
                   <TableRow>
                     <TableHead>Colaborador</TableHead>

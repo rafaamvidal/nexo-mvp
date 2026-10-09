@@ -7,6 +7,7 @@ import { AppSidebar } from "@/components/layout/AppSidebar";
 import { useAuth } from "@/hooks/useAuth";
 import { OrganizationSwitcher } from "@/components/organization/OrganizationSwitcher";
 import { PwaInstallPrompt } from "@/components/pwa/PwaInstallPrompt";
+import { MobileBottomNav } from "@/components/layout/MobileBottomNav";
 
 export function AppShell({ title, children }: { title: string; children: React.ReactNode }) {
   const { user, signOut } = useAuth();
@@ -36,8 +37,10 @@ export function AppShell({ title, children }: { title: string; children: React.R
             </div>
           </header>
 
-          <main className="min-w-0 max-w-full px-2.5 sm:px-4 md:px-6 pb-12 pt-3 sm:pt-4">{children}</main>
+          <main className="min-w-0 max-w-full px-2.5 sm:px-4 md:px-6 pb-20 md:pb-12 pt-3 sm:pt-4">{children}</main>
         </SidebarInset>
+
+        <MobileBottomNav />
       </div>
     </SidebarProvider>
   );

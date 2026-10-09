@@ -995,15 +995,112 @@ export default function Compras() {
           )}
 
           {!isLoading && !error && (filtered ?? []).length > 0 && (
-            <Card className="glass overflow-hidden rounded-xl border border-border/60">
-              <div className="flex sm:hidden items-center justify-between px-3 py-2 bg-muted/20 border-b border-border/40 text-[11px] text-muted-foreground">
-                <span className="flex items-center gap-1 font-medium">
-                  ↔️ Arraste para o lado para ver ações e receber
-                </span>
-                <span className="font-semibold">{(filtered ?? []).length} pedidos</span>
+            <>
+              {/* VISÃO MOBILE: CARDS NATIVOS DE PEDIDOS DE COMPRA */}
+              <div className="grid grid-cols-1 gap-2.5 sm:hidden">
+                {(filtered ?? []).map((o) => (
+                  <div
+                    key={o.id}
+                    className="flex flex-col gap-2 rounded-xl border border-border/70 bg-card p-3.5 shadow-sm active:bg-muted/30 transition-colors"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <div className="font-semibold text-sm leading-tight text-foreground truncate">
+                          {o.suppliers?.name ?? "Fornecedor não informado"}
+                        </div>
+                        <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                          <span>{new Date(o.created_at).toLocaleDateString("pt-BR")}</span>
+                          <span>•</span>
+                          <div>{statusBadge(o.status)}</div>
+                        </div>
+                      </div>
+
+                      <div className="text-right shrink-0">
+                        <span className="text-[11px] text-muted-foreground block">Total</span>
+                        <span className="font-bold text-sm text-foreground">
+                          {formatBRL(Number(o.total_amount ?? 0))}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between border-t border-border/40 pt-2 text-xs">
+                      <div className="flex items-center gap-1.5">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="h-8 gap-1 text-xs text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 border-emerald-500/40 px-2.5"
+                          onClick={() => receivePO.mutate(o)}
+                          disabled={receivePO.isPending || (o.status ?? "") === "Recebido" || (o.status ?? "") === "Cancelado"}
+                        >
+                          <CheckCircle2 className="h-3.5 w-3.5" />
+                          <span>Receber</span>
+                        </Button>
+
+                        {(o.status ?? "") !== "Cancelado" && (o.status ?? "") !== "Recebido" && (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            className="h-8 text-xs text-muted-foreground hover:text-destructive px-2"
+                            onClick={() => cancelPO.mutate(o)}
+                            disabled={cancelPO.isPending}
+                          >
+                            <XCircle className="h-3.5 w-3.5" />
+                            <span>Cancelar</span>
+                          </Button>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-1">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                          aria-label="Editar"
+                          onClick={() => void openEditDialog(o)}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-destructive/80 hover:text-destructive"
+                              aria-label="Excluir"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Excluir pedido?</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Esta ação não pode ser desfeita. Se houver vínculos, a exclusão poderá ser bloqueada.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                              <AlertDialogAction onClick={() => deletePO.mutate(o.id)} disabled={deletePO.isPending}>
+                                Excluir
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
-              <Table containerClassName="lg:max-h-[calc(100dvh-320px)]" className="min-w-[720px] w-full">
-                <TableHeader>
+
+              {/* VISÃO DESKTOP: TABELA COMPLETA */}
+              <Card className="glass hidden sm:block overflow-hidden rounded-xl border border-border/60">
+                <Table containerClassName="lg:max-h-[calc(100dvh-320px)]" className="w-full">
+                  <TableHeader>
                     <TableRow>
                       <TableHead>Data</TableHead>
                       <TableHead>Fornecedor</TableHead>
@@ -1078,7 +1175,8 @@ export default function Compras() {
                     ))}
                   </TableBody>
                 </Table>
-            </Card>
+              </Card>
+            </>
           )}
         </div>
       </section>

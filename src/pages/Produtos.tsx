@@ -343,210 +343,403 @@ export default function Produtos() {
           )}
 
           {!isLoading && !error && products.length > 0 && (
-            <Card className="glass overflow-hidden rounded-xl border border-border/60">
-              <div className="flex sm:hidden items-center justify-between px-3 py-2 bg-muted/20 border-b border-border/40 text-[11px] text-muted-foreground">
-                <span className="flex items-center gap-1 font-medium">
-                  ↔️ Arraste para o lado para ver preços e ações
-                </span>
-                <span className="font-semibold">{products.length} itens</span>
-              </div>
-              <Table containerClassName="lg:max-h-[calc(100dvh-320px)]" className="min-w-[720px] w-full">
-                <TableHeader className="sticky top-0 z-10 bg-card/95 backdrop-blur shadow-sm [&_th]:bg-card/95 [&_th]:backdrop-blur">
-                  <TableRow>
-                    <TableHead className="py-2.5 px-3">Nome</TableHead>
-                    <TableHead className="py-2.5 px-2 hidden md:table-cell">Categoria</TableHead>
-                    <TableHead className="py-2.5 px-2">Tipo</TableHead>
-                    <TableHead className="py-2.5 px-3 text-right">Estoque atual</TableHead>
-                    <TableHead className="py-2.5 px-3 text-right">Custo unitário</TableHead>
-                    <TableHead className="py-2.5 px-3 text-right hidden sm:table-cell">Preço</TableHead>
-                    <TableHead className="py-2.5 px-3 text-right">Ações</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {products.map((p) => {
-                    const min = Number(p.min_stock ?? 0);
-                    const low = p.type !== "Produto Final" && min > 0 && Number(p.current_stock) < min;
-                    const inactive = (p.status ?? "Ativo") === "Inativo";
-                    const pkg = parsePackageMetadata(p.description);
-                    return (
-                      <TableRow key={p.id} className="odd:bg-muted/20">
-                        <TableCell className="py-2.5 px-3 font-semibold">
-                          <div className="flex items-center gap-1.5 min-w-0 max-w-[170px] sm:max-w-[210px] md:max-w-[240px] lg:max-w-[280px]">
-                            <span className="truncate text-sm font-semibold" title={p.name}>{p.name}</span>
-                            {low && <Badge variant="destructive" className="shrink-0 text-[10px] px-1 py-0">Baixo</Badge>}
-                            {showInactive && inactive && <Badge variant="outline" className="shrink-0 text-[10px] px-1 py-0">Inativo</Badge>}
+            <>
+              {/* VISÃO MOBILE: CARDS NATIVOS DE PRODUTOS */}
+              <div className="grid grid-cols-1 gap-3 sm:hidden">
+                {products.map((p) => {
+                  const min = Number(p.min_stock ?? 0);
+                  const low = p.type !== "Produto Final" && min > 0 && Number(p.current_stock) < min;
+                  const inactive = (p.status ?? "Ativo") === "Inativo";
+                  const pkg = parsePackageMetadata(p.description);
+
+                  return (
+                    <div
+                      key={p.id}
+                      className="flex flex-col gap-2.5 rounded-xl border border-border/70 bg-card p-3.5 shadow-sm active:bg-muted/30 transition-colors"
+                    >
+                      {/* Topo do Card: Nome e Badges */}
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <div className="font-semibold text-sm leading-tight text-foreground truncate" title={p.name}>
+                            {p.name}
                           </div>
-                        </TableCell>
-                        <TableCell className="py-2.5 px-2 hidden md:table-cell text-xs text-muted-foreground truncate max-w-[120px]">
-                          {p.category ?? "—"}
-                        </TableCell>
-                        <TableCell className="py-2.5 px-2 whitespace-nowrap">
-                          {getTypeBadge(p.type)}
-                        </TableCell>
-                        <TableCell className={"py-2.5 px-3 text-right font-bold whitespace-nowrap " + (low ? "text-destructive" : "")}>
-                          <div>
-                            {p.current_stock}
-                            <span className="ml-1 text-xs font-normal text-muted-foreground">{p.unit}</span>
+                          <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                            {getTypeBadge(p.type)}
+                            {p.category && <span>• {p.category}</span>}
+                            {low && (
+                              <Badge variant="destructive" className="text-[10px] px-1 py-0 font-medium">
+                                Estoque Baixo
+                              </Badge>
+                            )}
+                            {showInactive && inactive && (
+                              <Badge variant="outline" className="text-[10px] px-1 py-0">
+                                Inativo
+                              </Badge>
+                            )}
                           </div>
+                        </div>
+
+                        {/* Ações primárias compactas */}
+                        <div className="flex items-center gap-1 shrink-0">
+                          <ProductFormSheet
+                            product={mappedEditable(p)}
+                            trigger={
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                aria-label="Editar"
+                                className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                            }
+                          />
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                aria-label="Excluir"
+                                className="h-8 w-8 text-destructive/80 hover:text-destructive"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Excluir produto?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Esta ação não pode ser desfeita. O produto será removido do cadastro.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                <AlertDialogAction
+                                  onClick={() => {
+                                    deleteMutation.mutate(p.id, {
+                                      onError: (e: any) => {
+                                        if (isForeignKeyViolation(e)) {
+                                          setInactivateTarget({ id: p.id, name: p.name });
+                                          return;
+                                        }
+                                      },
+                                    });
+                                  }}
+                                  disabled={deleteMutation.isPending}
+                                >
+                                  Excluir
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </div>
+                      </div>
+
+                      {/* Métricas: Estoque e Preços em Grid */}
+                      <div className="grid grid-cols-2 gap-2 rounded-lg bg-muted/30 p-2 text-xs border border-border/40">
+                        <div>
+                          <span className="text-[11px] text-muted-foreground block">Estoque Atual</span>
+                          <span className={"font-bold text-sm " + (low ? "text-destructive" : "text-foreground")}>
+                            {p.current_stock} <span className="font-normal text-xs text-muted-foreground">{p.unit}</span>
+                          </span>
                           {Number(p.current_stock) > 0 && Number(p.price_cost ?? 0) > 0 && (
-                            <span className="text-[11px] font-normal text-muted-foreground block">
+                            <span className="text-[10px] text-muted-foreground block">
                               Total: {formatBRL(Number(p.current_stock) * Number(p.price_cost))}
                             </span>
                           )}
-                        </TableCell>
-                        <TableCell className="py-2.5 px-3 text-right whitespace-nowrap">
-                          <div className="font-medium">
-                            {formatBRL(Number(p.price_cost ?? 0))}
-                            <span className="text-xs font-normal text-muted-foreground">/{p.unit}</span>
-                          </div>
-                          {pkg && (
-                            <span
-                              className="text-[11px] text-muted-foreground block truncate max-w-[120px] ml-auto"
-                              title={formatPackageSummary(pkg, p.unit)}
-                            >
-                              {pkg.packageName} {pkg.packageSize}{p.unit}
+                        </div>
+                        <div className="text-right">
+                          <span className="text-[11px] text-muted-foreground block">Custo / Preço</span>
+                          <span className="font-medium text-foreground text-xs block">
+                            Custo: {formatBRL(Number(p.price_cost ?? 0))}
+                          </span>
+                          {Number(p.price_sale ?? 0) > 0 && (
+                            <span className="font-bold text-emerald-600 dark:text-emerald-400 text-xs block">
+                              Venda: {formatBRL(Number(p.price_sale ?? 0))}
                             </span>
                           )}
-                        </TableCell>
-                        <TableCell className="py-2.5 px-3 text-right whitespace-nowrap hidden sm:table-cell">
-                          {formatBRL(Number(p.price_sale ?? 0))}
-                        </TableCell>
-                        <TableCell className="py-2.5 px-3 text-right whitespace-nowrap">
-                          <div className="inline-flex items-center justify-end gap-1">
-                            {p.type === "Produto Final" && (
-                              <>
-                                <ProduceBatchDialog
-                                  product={{
-                                    id: p.id,
-                                    name: p.name,
-                                    unit: p.unit,
-                                    current_stock: Number(p.current_stock ?? 0),
-                                    price_cost: p.price_cost,
-                                    price_sale: p.price_sale,
-                                  }}
-                                  trigger={
-                                    <Button
-                                      type="button"
-                                      variant="outline"
-                                      size="sm"
-                                      title="Apontar Fabricação / Novo Lote"
-                                      className="h-8 w-8 p-0 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 border-emerald-500/40"
-                                    >
-                                      <Factory className="h-4 w-4" />
-                                    </Button>
-                                  }
-                                />
-                                <BomManagerDialog
-                                  defaultProductId={p.id}
-                                  trigger={
-                                    <Button
-                                      type="button"
-                                      variant="outline"
-                                      size="sm"
-                                      title="Ficha Técnica / Receita"
-                                      className="h-8 w-8 p-0"
-                                    >
-                                      <ChefHat className="h-4 w-4 text-primary" />
-                                    </Button>
-                                  }
-                                />
-                              </>
-                            )}
-                            <ProductFormSheet
-                              product={mappedEditable(p)}
-                              trigger={
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  size="sm"
-                                  aria-label="Editar"
-                                  title="Editar produto"
-                                  className="h-8 w-8 p-0"
-                                >
-                                  <Pencil className="h-4 w-4" />
-                                </Button>
-                              }
-                            />
-                            <PriceHistoryDialog
-                              productId={p.id}
-                              productName={p.name}
-                              productUnit={p.unit}
-                              productType={p.type}
-                              currentCost={p.price_cost}
-                              trigger={
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  size="sm"
-                                  title="Histórico de Preços e Sazonalidade"
-                                  className="h-8 w-8 p-0 hover:text-emerald-600 hover:border-emerald-500/40"
-                                >
-                                  <TrendingUp className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-                                </Button>
-                              }
-                            />
-                            {showInactive && inactive && (
+                        </div>
+                      </div>
+
+                      {/* Informações adicionais de embalagem se houver */}
+                      {pkg && (
+                        <div className="text-[11px] text-muted-foreground">
+                          Embalagem: {pkg.packageName} ({pkg.packageSize} {p.unit})
+                        </div>
+                      )}
+
+                      {/* Barra de ações operacionais e ferramentas */}
+                      <div className="flex items-center justify-between border-t border-border/40 pt-2 text-xs">
+                        <div className="flex items-center gap-1">
+                          {p.type === "Produto Final" && (
+                            <>
+                              <ProduceBatchDialog
+                                product={{
+                                  id: p.id,
+                                  name: p.name,
+                                  unit: p.unit,
+                                  current_stock: Number(p.current_stock ?? 0),
+                                  price_cost: p.price_cost,
+                                  price_sale: p.price_sale,
+                                }}
+                                trigger={
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-8 gap-1 text-xs text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 border-emerald-500/40 px-2"
+                                  >
+                                    <Factory className="h-3.5 w-3.5" />
+                                    <span>Produzir</span>
+                                  </Button>
+                                }
+                              />
+                              <BomManagerDialog
+                                defaultProductId={p.id}
+                                trigger={
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-8 gap-1 text-xs px-2"
+                                  >
+                                    <ChefHat className="h-3.5 w-3.5 text-primary" />
+                                    <span>Receita</span>
+                                  </Button>
+                                }
+                              />
+                            </>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-1.5 ml-auto">
+                          <PriceHistoryDialog
+                            productId={p.id}
+                            productName={p.name}
+                            productUnit={p.unit}
+                            productType={p.type}
+                            currentCost={p.price_cost}
+                            trigger={
                               <Button
                                 type="button"
                                 variant="outline"
                                 size="sm"
-                                aria-label="Reativar"
-                                title="Reativar produto"
-                                onClick={() => reactivateMutation.mutate(p.id)}
-                                disabled={reactivateMutation.isPending}
                                 className="h-8 w-8 p-0"
+                                title="Histórico de Preços"
                               >
-                                <RefreshCw className="h-4 w-4" />
+                                <TrendingUp className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
                               </Button>
+                            }
+                          />
+                          <StockQuickAdjust productId={p.id} />
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* VISÃO DESKTOP: TABELA COMPLETA */}
+              <Card className="glass hidden sm:block overflow-hidden rounded-xl border border-border/60">
+                <Table containerClassName="lg:max-h-[calc(100dvh-320px)]" className="w-full">
+                  <TableHeader className="sticky top-0 z-10 bg-card/95 backdrop-blur shadow-sm [&_th]:bg-card/95 [&_th]:backdrop-blur">
+                    <TableRow>
+                      <TableHead className="py-2.5 px-3">Nome</TableHead>
+                      <TableHead className="py-2.5 px-2 hidden md:table-cell">Categoria</TableHead>
+                      <TableHead className="py-2.5 px-2">Tipo</TableHead>
+                      <TableHead className="py-2.5 px-3 text-right">Estoque atual</TableHead>
+                      <TableHead className="py-2.5 px-3 text-right">Custo unitário</TableHead>
+                      <TableHead className="py-2.5 px-3 text-right hidden sm:table-cell">Preço</TableHead>
+                      <TableHead className="py-2.5 px-3 text-right">Ações</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {products.map((p) => {
+                      const min = Number(p.min_stock ?? 0);
+                      const low = p.type !== "Produto Final" && min > 0 && Number(p.current_stock) < min;
+                      const inactive = (p.status ?? "Ativo") === "Inativo";
+                      const pkg = parsePackageMetadata(p.description);
+                      return (
+                        <TableRow key={p.id} className="odd:bg-muted/20">
+                          <TableCell className="py-2.5 px-3 font-semibold">
+                            <div className="flex items-center gap-1.5 min-w-0 max-w-[170px] sm:max-w-[210px] md:max-w-[240px] lg:max-w-[280px]">
+                              <span className="truncate text-sm font-semibold" title={p.name}>{p.name}</span>
+                              {low && <Badge variant="destructive" className="shrink-0 text-[10px] px-1 py-0">Baixo</Badge>}
+                              {showInactive && inactive && <Badge variant="outline" className="shrink-0 text-[10px] px-1 py-0">Inativo</Badge>}
+                            </div>
+                          </TableCell>
+                          <TableCell className="py-2.5 px-2 hidden md:table-cell text-xs text-muted-foreground truncate max-w-[120px]">
+                            {p.category ?? "—"}
+                          </TableCell>
+                          <TableCell className="py-2.5 px-2 whitespace-nowrap">
+                            {getTypeBadge(p.type)}
+                          </TableCell>
+                          <TableCell className={"py-2.5 px-3 text-right font-bold whitespace-nowrap " + (low ? "text-destructive" : "")}>
+                            <div>
+                              {p.current_stock}
+                              <span className="ml-1 text-xs font-normal text-muted-foreground">{p.unit}</span>
+                            </div>
+                            {Number(p.current_stock) > 0 && Number(p.price_cost ?? 0) > 0 && (
+                              <span className="text-[11px] font-normal text-muted-foreground block">
+                                Total: {formatBRL(Number(p.current_stock) * Number(p.price_cost))}
+                              </span>
                             )}
-                            <AlertDialog>
-                              <AlertDialogTrigger asChild>
+                          </TableCell>
+                          <TableCell className="py-2.5 px-3 text-right whitespace-nowrap">
+                            <div className="font-medium">
+                              {formatBRL(Number(p.price_cost ?? 0))}
+                              <span className="text-xs font-normal text-muted-foreground">/{p.unit}</span>
+                            </div>
+                            {pkg && (
+                              <span
+                                className="text-[11px] text-muted-foreground block truncate max-w-[120px] ml-auto"
+                                title={formatPackageSummary(pkg, p.unit)}
+                              >
+                                {pkg.packageName} {pkg.packageSize}{p.unit}
+                              </span>
+                            )}
+                          </TableCell>
+                          <TableCell className="py-2.5 px-3 text-right whitespace-nowrap hidden sm:table-cell">
+                            {formatBRL(Number(p.price_sale ?? 0))}
+                          </TableCell>
+                          <TableCell className="py-2.5 px-3 text-right whitespace-nowrap">
+                            <div className="inline-flex items-center justify-end gap-1">
+                              {p.type === "Produto Final" && (
+                                <>
+                                  <ProduceBatchDialog
+                                    product={{
+                                      id: p.id,
+                                      name: p.name,
+                                      unit: p.unit,
+                                      current_stock: Number(p.current_stock ?? 0),
+                                      price_cost: p.price_cost,
+                                      price_sale: p.price_sale,
+                                    }}
+                                    trigger={
+                                      <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        title="Apontar Fabricação / Novo Lote"
+                                        className="h-8 w-8 p-0 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 border-emerald-500/40"
+                                      >
+                                        <Factory className="h-4 w-4" />
+                                      </Button>
+                                    }
+                                  />
+                                  <BomManagerDialog
+                                    defaultProductId={p.id}
+                                    trigger={
+                                      <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        title="Ficha Técnica / Receita"
+                                        className="h-8 w-8 p-0"
+                                      >
+                                        <ChefHat className="h-4 w-4 text-primary" />
+                                      </Button>
+                                    }
+                                  />
+                                </>
+                              )}
+                              <ProductFormSheet
+                                product={mappedEditable(p)}
+                                trigger={
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    aria-label="Editar"
+                                    title="Editar produto"
+                                    className="h-8 w-8 p-0"
+                                  >
+                                    <Pencil className="h-4 w-4" />
+                                  </Button>
+                                }
+                              />
+                              <PriceHistoryDialog
+                                productId={p.id}
+                                productName={p.name}
+                                productUnit={p.unit}
+                                productType={p.type}
+                                currentCost={p.price_cost}
+                                trigger={
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    title="Histórico de Preços e Sazonalidade"
+                                    className="h-8 w-8 p-0 hover:text-emerald-600 hover:border-emerald-500/40"
+                                  >
+                                    <TrendingUp className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                                  </Button>
+                                }
+                              />
+                              {showInactive && inactive && (
                                 <Button
                                   type="button"
                                   variant="outline"
                                   size="sm"
-                                  aria-label="Excluir"
-                                  title="Excluir produto"
-                                  className="h-8 w-8 p-0 hover:text-destructive hover:border-destructive/40"
+                                  aria-label="Reativar"
+                                  title="Reativar produto"
+                                  onClick={() => reactivateMutation.mutate(p.id)}
+                                  disabled={reactivateMutation.isPending}
+                                  className="h-8 w-8 p-0"
                                 >
-                                  <Trash2 className="h-4 w-4" />
+                                  <RefreshCw className="h-4 w-4" />
                                 </Button>
-                              </AlertDialogTrigger>
-                              <AlertDialogContent>
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle>Excluir produto?</AlertDialogTitle>
-                                  <AlertDialogDescription>
-                                    Esta ação não pode ser desfeita. O produto será removido do cadastro.
-                                  </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                  <AlertDialogAction
-                                    onClick={() => {
-                                      deleteMutation.mutate(p.id, {
-                                        onError: (e: any) => {
-                                          if (isForeignKeyViolation(e)) {
-                                            setInactivateTarget({ id: p.id, name: p.name });
-                                            return;
-                                          }
-                                        },
-                                      });
-                                    }}
-                                    disabled={deleteMutation.isPending}
+                              )}
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    aria-label="Excluir"
+                                    title="Excluir produto"
+                                    className="h-8 w-8 p-0 hover:text-destructive hover:border-destructive/40"
                                   >
-                                    Excluir
-                                  </AlertDialogAction>
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                            </AlertDialog>
-                            <StockQuickAdjust productId={p.id} />
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Excluir produto?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      Esta ação não pode ser desfeita. O produto será removido do cadastro.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                    <AlertDialogAction
+                                      onClick={() => {
+                                        deleteMutation.mutate(p.id, {
+                                          onError: (e: any) => {
+                                            if (isForeignKeyViolation(e)) {
+                                              setInactivateTarget({ id: p.id, name: p.name });
+                                              return;
+                                            }
+                                          },
+                                        });
+                                      }}
+                                      disabled={deleteMutation.isPending}
+                                    >
+                                      Excluir
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                              <StockQuickAdjust productId={p.id} />
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
                 <div className="flex items-center justify-between border-t border-border/60 px-4 py-2.5 text-xs text-muted-foreground bg-muted/20">
                   <span>
                     Mostrando <strong className="text-foreground">{products.length}</strong> de{" "}
@@ -559,7 +752,8 @@ export default function Produtos() {
                   )}
                 </div>
               </Card>
-            )}
+            </>
+          )}
         </div>
 
         {/* Dialog controlado para oferecer Inativar quando delete for bloqueado por movimentações */}

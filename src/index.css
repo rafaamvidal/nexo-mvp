@@ -170,6 +170,28 @@ All colors MUST be HSL.
   .text-balance {
     text-wrap: balance;
   }
+
+  /* No-scrollbar utility para experiência estilo app nativo */
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  /* Em telas touch / mobile, oculta barras de rolagem estéticas padrão browser para parecer app nativo */
+  @media (pointer: coarse), (max-width: 768px) {
+    *::-webkit-scrollbar {
+      display: none !important;
+      width: 0 !important;
+      height: 0 !important;
+    }
+    * {
+      scrollbar-width: none !important;
+      -ms-overflow-style: none !important;
+    }
+  }
 }
 
 #lovable-badge {

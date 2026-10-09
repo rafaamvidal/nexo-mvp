@@ -588,14 +588,95 @@ export default function Cadastros() {
               )}
 
               {!loadingClients && !errClients && (
-                <Card className="glass mt-4 overflow-hidden rounded-xl border border-border/60">
-                  <div className="flex sm:hidden items-center justify-between px-3 py-2 bg-muted/20 border-b border-border/40 text-[11px] text-muted-foreground">
-                    <span className="flex items-center gap-1 font-medium">
-                      ↔️ Arraste para o lado para ver contatos e ações
-                    </span>
-                    <span className="font-semibold">{filteredClients.length} clientes</span>
+                <>
+                  {/* VISÃO MOBILE: CARDS COMPACTOS NATIVOS (Sem rolagem horizontal) */}
+                  <div className="grid grid-cols-1 gap-2.5 sm:hidden mt-4">
+                    {filteredClients.length === 0 ? (
+                      <Card className="glass p-6 text-center text-sm text-muted-foreground">
+                        Nenhum cliente encontrado.
+                      </Card>
+                    ) : (
+                      filteredClients.map((c) => {
+                        const waUrl = getWhatsAppUrl(c.phone, `Olá ${c.name}, contato do AGILIX.`);
+                        return (
+                          <Card key={c.id} className="glass p-3.5 border-border/60 transition-shadow">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0 flex-1">
+                                <h3 className="font-bold text-sm text-foreground truncate">{c.name}</h3>
+                                <p className="text-xs text-muted-foreground mt-0.5">
+                                  {c.tax_id ? maskCpfCnpj(c.tax_id) : "Sem documento"}
+                                </p>
+                              </div>
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                {waUrl && (
+                                  <a
+                                    href={waUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
+                                    aria-label="WhatsApp"
+                                    title="WhatsApp"
+                                  >
+                                    <MessageCircle className="h-4 w-4" />
+                                  </a>
+                                )}
+                                <EntityDialog
+                                  title="Editar Cliente"
+                                  initial={c}
+                                  isClient={true}
+                                  trigger={
+                                    <Button type="button" variant="outline" size="icon" className="h-8 w-8" aria-label="Editar">
+                                      <Pencil className="h-3.5 w-3.5" />
+                                    </Button>
+                                  }
+                                  onSave={async (payload) =>
+                                    upsertClient.mutateAsync({ ...payload, id: c.id })
+                                  }
+                                />
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="icon"
+                                  className="h-8 w-8 text-destructive hover:bg-destructive/10"
+                                  aria-label="Excluir"
+                                  onClick={() => delClient.mutate(c.id)}
+                                  disabled={delClient.isPending}
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
+                            </div>
+
+                            {(c.phone || c.email || c.city || c.limit_credit) && (
+                              <div className="mt-2.5 pt-2 border-t border-border/40 flex flex-wrap items-center justify-between gap-2 text-[11px] text-muted-foreground">
+                                {c.phone && (
+                                  <span className="inline-flex items-center gap-1">
+                                    <Phone className="h-3 w-3 text-muted-foreground" />
+                                    {maskPhone(c.phone)}
+                                  </span>
+                                )}
+                                {(c.city || c.state) && (
+                                  <span className="inline-flex items-center gap-1">
+                                    <MapPin className="h-3 w-3 text-muted-foreground" />
+                                    {[c.city, c.state].filter(Boolean).join(" - ")}
+                                  </span>
+                                )}
+                                {c.limit_credit ? (
+                                  <span className="font-semibold text-foreground">
+                                    Limite: R$ {Number(c.limit_credit).toFixed(2)}
+                                  </span>
+                                ) : null}
+                              </div>
+                            )}
+                          </Card>
+                        );
+                      })
+                    )}
                   </div>
-                  <Table containerClassName="lg:max-h-[calc(100dvh-320px)]" className="min-w-[700px] w-full">
+
+                  {/* VISÃO DESKTOP / TABLET (Tabela tradicional completa) */}
+                  <Card className="glass mt-4 overflow-hidden rounded-xl border border-border/60 hidden sm:block">
+                    <Table containerClassName="lg:max-h-[calc(100dvh-320px)]" className="min-w-[700px] w-full">
                       <TableHeader>
                         <TableRow>
                           <TableHead>Nome</TableHead>
@@ -701,7 +782,8 @@ export default function Cadastros() {
                         </TableBody>
                       </Table>
                   </Card>
-                )}
+                </>
+              )}
               </TabsContent>
 
               {/* ABA FORNECEDORES */}
@@ -739,23 +821,135 @@ export default function Cadastros() {
                 )}
 
                 {!loadingSuppliers && !errSuppliers && (
-                  <Card className="glass mt-4 overflow-hidden rounded-xl border border-border/60">
-                    <div className="flex sm:hidden items-center justify-between px-3 py-2 bg-muted/20 border-b border-border/40 text-[11px] text-muted-foreground">
-                      <span className="flex items-center gap-1 font-medium">
-                        ↔️ Arraste para o lado para ver produtos e contatos
-                      </span>
-                      <span className="font-semibold">{filteredSuppliers.length} fornecedores</span>
+                  <>
+                    {/* VISÃO MOBILE: CARDS COMPACTOS NATIVOS (Sem rolagem horizontal) */}
+                    <div className="grid grid-cols-1 gap-2.5 sm:hidden mt-4">
+                      {filteredSuppliers.length === 0 ? (
+                        <Card className="glass p-6 text-center text-sm text-muted-foreground">
+                          Nenhum fornecedor encontrado.
+                        </Card>
+                      ) : (
+                        filteredSuppliers.map((s) => {
+                          const matchFornece = s.observations?.match(/\[Fornece:\s*([^\]]+)\]/i);
+                          const fornece = matchFornece ? matchFornece[1].trim() : null;
+
+                          const matchVendedor = s.observations?.match(/\[Vendedor:\s*([^\]]+)\]/i);
+                          const vendedor = matchVendedor ? matchVendedor[1].trim() : null;
+
+                          const waGreeting = vendedor
+                            ? `Olá ${vendedor}, tudo bem? Contato da fábrica via AGILIX referente a ${s.name}.`
+                            : `Olá ${s.name}, tudo bem? Contato da fábrica via AGILIX.`;
+                          const waUrl = getWhatsAppUrl(s.phone, waGreeting);
+
+                          return (
+                            <div
+                              key={s.id}
+                              className="flex flex-col gap-2 rounded-xl border border-border/70 bg-card p-3.5 shadow-sm active:bg-muted/30 transition-colors"
+                            >
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="min-w-0 flex-1">
+                                  <div className="font-semibold text-sm leading-tight text-foreground truncate">
+                                    {s.name}
+                                  </div>
+                                  <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                                    {s.tax_id && <span>{maskCpfCnpj(s.tax_id)}</span>}
+                                    {(s.city || s.state) && (
+                                      <span className="inline-flex items-center gap-1 text-muted-foreground">
+                                        • <MapPin className="h-3 w-3 shrink-0" />
+                                        {[s.city, s.state].filter(Boolean).join(" - ")}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-1 shrink-0">
+                                  <EntityDialog
+                                    title="Editar Fornecedor"
+                                    initial={s}
+                                    isClient={false}
+                                    trigger={
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                                      >
+                                        <Pencil className="h-4 w-4" />
+                                      </Button>
+                                    }
+                                    onSave={async (payload) =>
+                                      upsertSupplier.mutateAsync({ ...payload, id: s.id })
+                                    }
+                                  />
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 text-destructive/80 hover:text-destructive"
+                                    onClick={() => delSupplier.mutate(s.id)}
+                                    disabled={delSupplier.isPending}
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              </div>
+
+                              {(fornece || vendedor) && (
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                  {fornece && (
+                                    <span
+                                      className="inline-flex items-center gap-1 rounded-md bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:text-amber-400 border border-amber-500/20"
+                                      title={`Fornece: ${fornece}`}
+                                    >
+                                      <Package className="h-3 w-3 shrink-0" />
+                                      <span>{fornece}</span>
+                                    </span>
+                                  )}
+                                  {vendedor && (
+                                    <span className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                                      <User className="h-3 w-3 shrink-0" />
+                                      <span>Vendedor: {vendedor}</span>
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+
+                              {s.phone && (
+                                <div className="mt-1 flex items-center justify-between border-t border-border/40 pt-2 text-xs">
+                                  <div className="flex items-center gap-1.5 text-muted-foreground">
+                                    <Phone className="h-3.5 w-3.5 text-muted-foreground" />
+                                    <span>{maskPhone(s.phone)}</span>
+                                  </div>
+                                  {waUrl && (
+                                    <a
+                                      href={waUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs font-semibold text-emerald-600 transition-colors active:bg-emerald-500/20"
+                                    >
+                                      <MessageCircle className="h-3.5 w-3.5" />
+                                      <span>WhatsApp</span>
+                                    </a>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })
+                      )}
                     </div>
-                    <Table containerClassName="lg:max-h-[calc(100dvh-320px)]" className="min-w-[720px] w-full">
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Nome / Fornecedor</TableHead>
-                          <TableHead>CNPJ/CPF</TableHead>
-                          <TableHead>Contato & WhatsApp</TableHead>
-                          <TableHead>Localização</TableHead>
-                          <TableHead className="text-right">Ações</TableHead>
-                        </TableRow>
-                      </TableHeader>
+
+                    {/* VISÃO DESKTOP: TABELA COMPLETA */}
+                    <Card className="glass mt-4 hidden sm:block overflow-hidden rounded-xl border border-border/60">
+                      <Table containerClassName="lg:max-h-[calc(100dvh-320px)]" className="w-full">
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Nome / Fornecedor</TableHead>
+                            <TableHead>CNPJ/CPF</TableHead>
+                            <TableHead>Contato & WhatsApp</TableHead>
+                            <TableHead>Localização</TableHead>
+                            <TableHead className="text-right">Ações</TableHead>
+                          </TableRow>
+                        </TableHeader>
                         <TableBody>
                           {filteredSuppliers.length === 0 ? (
                             <TableRow>
@@ -872,7 +1066,8 @@ export default function Cadastros() {
                           )}
                         </TableBody>
                       </Table>
-                  </Card>
+                    </Card>
+                  </>
                 )}
               </TabsContent>
 

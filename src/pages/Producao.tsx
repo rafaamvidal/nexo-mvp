@@ -549,34 +549,42 @@ export default function Producao() {
           )}
 
           {!isLoading && !error && (filtered ?? []).length > 0 && (
-            <Card className="glass overflow-hidden rounded-xl border border-border/60">
-              <div className="flex sm:hidden items-center justify-between px-3 py-2 bg-muted/20 border-b border-border/40 text-[11px] text-muted-foreground">
-                <span className="flex items-center gap-1 font-medium">
-                  ↔️ Arraste para o lado para alterar status e ações
-                </span>
-                <span className="font-semibold">{(filtered ?? []).length} ordens</span>
-              </div>
-              <Table containerClassName="lg:max-h-[calc(100dvh-320px)]" className="min-w-[820px] w-full">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Data</TableHead>
-                    <TableHead>Produto</TableHead>
-                    <TableHead className="text-right">Qtd</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Ações</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {(filtered ?? []).map((o) => (
-                    <TableRow key={o.id} className="odd:bg-muted/20">
-                      <TableCell className="text-sm text-muted-foreground">
-                        {new Date(o.created_at ?? new Date().toISOString()).toLocaleDateString("pt-BR")}
-                      </TableCell>
-                      <TableCell className="font-semibold">{o.products?.name ?? "—"}</TableCell>
-                      <TableCell className="text-right font-bold">{Number(o.quantity ?? 0)}</TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          {statusBadge(o.status)}
+            <>
+              {/* VISÃO MOBILE: CARDS NATIVOS DE ORDENS DE PRODUÇÃO */}
+              <div className="grid grid-cols-1 gap-2.5 sm:hidden">
+                {(filtered ?? []).map((o) => {
+                  const isDone = (o.status ?? "") === "Finalizada";
+                  const isCancelled = (o.status ?? "") === "Cancelada";
+
+                  return (
+                    <div
+                      key={o.id}
+                      className="flex flex-col gap-2 rounded-xl border border-border/70 bg-card p-3.5 shadow-sm active:bg-muted/30 transition-colors"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <div className="font-semibold text-sm leading-tight text-foreground truncate">
+                            {o.products?.name ?? "Produto não informado"}
+                          </div>
+                          <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                            <span>{new Date(o.created_at ?? new Date().toISOString()).toLocaleDateString("pt-BR")}</span>
+                            <span>•</span>
+                            <div>{statusBadge(o.status)}</div>
+                          </div>
+                        </div>
+
+                        <div className="text-right shrink-0">
+                          <span className="text-[11px] text-muted-foreground block">Quantidade</span>
+                          <span className="font-bold text-sm text-foreground">
+                            {Number(o.quantity ?? 0)} {o.products?.unit ?? "un"}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Seletor rápido de Status no card */}
+                      {!isDone && !isCancelled && (
+                        <div className="flex items-center justify-between rounded-lg bg-muted/30 p-2 border border-border/40 text-xs">
+                          <span className="text-muted-foreground text-[11px]">Progresso da Ordem:</span>
                           <Select
                             value={o.status ?? "Planejada"}
                             onValueChange={(v) => {
@@ -587,9 +595,9 @@ export default function Producao() {
                                 updateStatus.mutate({ id: o.id, next: v });
                               }
                             }}
-                            disabled={(o.status ?? "") === "Finalizada" || (o.status ?? "") === "Cancelada" || updateStatus.isPending}
+                            disabled={updateStatus.isPending}
                           >
-                            <SelectTrigger className="h-8 w-[160px]">
+                            <SelectTrigger className="h-7 w-[140px] text-xs">
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -599,16 +607,62 @@ export default function Producao() {
                             </SelectContent>
                           </Select>
                         </div>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="inline-flex items-center gap-2">
-                          <Button type="button" variant="outline" size="icon" aria-label="Editar" onClick={() => openEditDialog(o)}>
+                      )}
+
+                      <div className="flex items-center justify-between border-t border-border/40 pt-2 text-xs">
+                        <div className="flex items-center gap-1.5">
+                          {!isDone && !isCancelled && (
+                            <>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                className="h-8 gap-1 text-xs text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 border-emerald-500/40 px-2.5"
+                                onClick={() => {
+                                  setFinalizeTarget(o);
+                                  setFinalizeSkipBom(false);
+                                }}
+                                disabled={finalizeMO.isPending}
+                              >
+                                <CheckCircle2 className="h-3.5 w-3.5" />
+                                <span>Finalizar</span>
+                              </Button>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="ghost"
+                                className="h-8 text-xs text-muted-foreground hover:text-destructive px-2"
+                                onClick={() => cancelMO.mutate(o)}
+                                disabled={cancelMO.isPending}
+                              >
+                                <XCircle className="h-3.5 w-3.5" />
+                                <span>Cancelar</span>
+                              </Button>
+                            </>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-1">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                            aria-label="Editar"
+                            onClick={() => openEditDialog(o)}
+                          >
                             <Pencil className="h-4 w-4" />
                           </Button>
 
                           <AlertDialog>
                             <AlertDialogTrigger asChild>
-                              <Button type="button" variant="outline" size="icon" aria-label="Excluir">
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-destructive/80 hover:text-destructive"
+                                aria-label="Excluir"
+                              >
                                 <Trash2 className="h-4 w-4" />
                               </Button>
                             </AlertDialogTrigger>
@@ -627,40 +681,121 @@ export default function Producao() {
                               </AlertDialogFooter>
                             </AlertDialogContent>
                           </AlertDialog>
-
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            className="gap-2"
-                            onClick={() => {
-                              setFinalizeTarget(o);
-                              setFinalizeSkipBom(false);
-                            }}
-                            disabled={finalizeMO.isPending || (o.status ?? "") === "Finalizada" || (o.status ?? "") === "Cancelada"}
-                          >
-                            <CheckCircle2 className="h-4 w-4" />
-                            Finalizar
-                          </Button>
-
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            className="gap-2"
-                            onClick={() => cancelMO.mutate(o)}
-                            disabled={cancelMO.isPending || (o.status ?? "") === "Cancelada"}
-                          >
-                            <XCircle className="h-4 w-4" />
-                            Cancelar
-                          </Button>
                         </div>
-                      </TableCell>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* VISÃO DESKTOP: TABELA COMPLETA */}
+              <Card className="glass hidden sm:block overflow-hidden rounded-xl border border-border/60">
+                <Table containerClassName="lg:max-h-[calc(100dvh-320px)]" className="w-full">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Data</TableHead>
+                      <TableHead>Produto</TableHead>
+                      <TableHead className="text-right">Qtd</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Ações</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </Card>
+                  </TableHeader>
+                  <TableBody>
+                    {(filtered ?? []).map((o) => (
+                      <TableRow key={o.id} className="odd:bg-muted/20">
+                        <TableCell className="text-sm text-muted-foreground">
+                          {new Date(o.created_at ?? new Date().toISOString()).toLocaleDateString("pt-BR")}
+                        </TableCell>
+                        <TableCell className="font-semibold">{o.products?.name ?? "—"}</TableCell>
+                        <TableCell className="text-right font-bold">{Number(o.quantity ?? 0)}</TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            {statusBadge(o.status)}
+                            <Select
+                              value={o.status ?? "Planejada"}
+                              onValueChange={(v) => {
+                                if (v === "Finalizada") {
+                                  setFinalizeTarget(o);
+                                  setFinalizeSkipBom(false);
+                                } else {
+                                  updateStatus.mutate({ id: o.id, next: v });
+                                }
+                              }}
+                              disabled={(o.status ?? "") === "Finalizada" || (o.status ?? "") === "Cancelada" || updateStatus.isPending}
+                            >
+                              <SelectTrigger className="h-8 w-[160px]">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="Planejada">Planejada</SelectItem>
+                                <SelectItem value="Em Produção">Em Produção</SelectItem>
+                                <SelectItem value="Finalizada">Finalizada</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="inline-flex items-center gap-2">
+                            <Button type="button" variant="outline" size="icon" aria-label="Editar" onClick={() => openEditDialog(o)}>
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button type="button" variant="outline" size="icon" aria-label="Excluir">
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Excluir ordem?</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Esta ação não pode ser desfeita. Se houver vínculos, a exclusão poderá ser bloqueada.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                  <AlertDialogAction onClick={() => deleteMO.mutate(o.id)} disabled={deleteMO.isPending}>
+                                    Excluir
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="gap-2"
+                              onClick={() => {
+                                setFinalizeTarget(o);
+                                setFinalizeSkipBom(false);
+                              }}
+                              disabled={finalizeMO.isPending || (o.status ?? "") === "Finalizada" || (o.status ?? "") === "Cancelada"}
+                            >
+                              <CheckCircle2 className="h-4 w-4" />
+                              Finalizar
+                            </Button>
+
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="gap-2"
+                              onClick={() => cancelMO.mutate(o)}
+                              disabled={cancelMO.isPending || (o.status ?? "") === "Cancelada"}
+                            >
+                              <XCircle className="h-4 w-4" />
+                              Cancelar
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </Card>
+            </>
           )}
         </div>
 

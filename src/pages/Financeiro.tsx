@@ -1113,123 +1113,226 @@ export default function Financeiro() {
           )}
 
           {!isLoading && !error && filtered.length > 0 && (
-            <Card className="glass overflow-hidden rounded-xl border border-border/60">
-              <div className="flex sm:hidden items-center justify-between px-3 py-2 bg-muted/20 border-b border-border/40 text-[11px] text-muted-foreground">
-                <span className="flex items-center gap-1 font-medium">
-                  ↔️ Arraste para o lado para ver mais informações
-                </span>
-                <span className="font-semibold">{filtered.length} títulos</span>
-              </div>
-              <Table containerClassName="lg:max-h-[calc(100dvh-320px)]" className="min-w-[760px] w-full">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Vencimento</TableHead>
-                    <TableHead>Descrição</TableHead>
-                    <TableHead>Categoria</TableHead>
-                    <TableHead className="text-right">Valor</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-center">Baixa Rápida</TableHead>
-                    <TableHead className="text-right">Ações</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filtered.map((r) => {
-                    const isReceita = (r.type ?? "").toLowerCase() === "receber";
-                    const isAberto = (r.status ?? "").toLowerCase() === "aberto";
+            <>
+              {/* VISÃO MOBILE: CARDS NATIVOS DE LANÇAMENTOS */}
+              <div className="grid grid-cols-1 gap-2.5 sm:hidden">
+                {filtered.map((r) => {
+                  const isReceita = (r.type ?? "").toLowerCase() === "receber";
+                  const isAberto = (r.status ?? "").toLowerCase() === "aberto";
 
-                    return (
-                      <TableRow key={r.id} className="odd:bg-muted/15">
-                        <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
-                          {formatDateBR(r.due_date)}
-                        </TableCell>
-                        <TableCell>
-                          <div className="font-semibold text-sm">{r.description}</div>
-                          {r.payment_date && (
-                            <span className="text-[11px] text-muted-foreground">
-                              Pago em: {formatDateBR(r.payment_date)}
-                            </span>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-xs text-muted-foreground">
-                          {r.category ? <Badge variant="secondary">{r.category}</Badge> : "—"}
-                        </TableCell>
-                        <TableCell
-                          className={`text-right font-extrabold ${
-                            isReceita ? "text-emerald-600" : "text-rose-600"
-                          }`}
-                        >
-                          {isReceita ? `+${formatBRL(r.amount)}` : `-${formatBRL(r.amount)}`}
-                        </TableCell>
-                        <TableCell>{renderStatusBadge(r)}</TableCell>
-                        <TableCell className="text-center">
+                  return (
+                    <div
+                      key={r.id}
+                      className="flex flex-col gap-2 rounded-xl border border-border/70 bg-card p-3.5 shadow-sm active:bg-muted/30 transition-colors"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <div className="font-semibold text-sm leading-tight text-foreground truncate">
+                            {r.description}
+                          </div>
+                          <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                            {renderStatusBadge(r)}
+                            {r.category && <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{r.category}</Badge>}
+                          </div>
+                        </div>
+
+                        <div className="text-right shrink-0">
+                          <span
+                            className={`font-extrabold text-sm ${
+                              isReceita ? "text-emerald-600" : "text-rose-600"
+                            }`}
+                          >
+                            {isReceita ? `+${formatBRL(r.amount)}` : `-${formatBRL(r.amount)}`}
+                          </span>
+                          <span className="text-[11px] text-muted-foreground block">
+                            Venc: {formatDateBR(r.due_date)}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between border-t border-border/40 pt-2 text-xs">
+                        <div>
                           {isAberto ? (
                             <Button
                               type="button"
                               size="sm"
                               variant="outline"
-                              className="h-7 text-xs border-emerald-500/40 text-emerald-600 hover:bg-emerald-500/10 gap-1.5"
+                              className="h-8 text-xs border-emerald-500/40 text-emerald-600 hover:bg-emerald-500/10 gap-1.5 px-3"
                               onClick={() => settleMutation.mutate(r)}
                               disabled={settleMutation.isPending}
-                              title={isReceita ? "Confirmar recebimento" : "Confirmar pagamento"}
                             >
                               <Check className="h-3.5 w-3.5" />
-                              {isReceita ? "Receber" : "Pagar"}
+                              <span>{isReceita ? "Baixar Recebimento" : "Baixar Pagamento"}</span>
                             </Button>
                           ) : (
-                            <span className="text-xs text-muted-foreground">—</span>
+                            <span className="text-[11px] text-muted-foreground">
+                              {r.payment_date ? `Liquidado em ${formatDateBR(r.payment_date)}` : "Liquidado"}
+                            </span>
                           )}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="inline-flex items-center gap-1.5">
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8"
-                              aria-label="Editar"
-                              onClick={() => openEditDialog(r)}
-                            >
-                              <Pencil className="h-3.5 w-3.5" />
-                            </Button>
-                            <AlertDialog>
-                              <AlertDialogTrigger asChild>
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-8 w-8 text-destructive hover:bg-destructive/10"
-                                  aria-label="Excluir"
+                        </div>
+
+                        <div className="flex items-center gap-1">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                            aria-label="Editar"
+                            onClick={() => openEditDialog(r)}
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-destructive/80 hover:text-destructive"
+                                aria-label="Excluir"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Excluir lançamento financeiro?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  O título "{r.description}" de {formatBRL(r.amount)} será removido permanentemente.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                <AlertDialogAction
+                                  onClick={() => deleteMutation.mutate(r.id)}
+                                  disabled={deleteMutation.isPending}
+                                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                                 >
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                </Button>
-                              </AlertDialogTrigger>
-                              <AlertDialogContent>
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle>Excluir lançamento financeiro?</AlertDialogTitle>
-                                  <AlertDialogDescription>
-                                    O título "{r.description}" de {formatBRL(r.amount)} será removido permanentemente.
-                                  </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                  <AlertDialogAction
-                                    onClick={() => deleteMutation.mutate(r.id)}
-                                    disabled={deleteMutation.isPending}
-                                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                  Excluir
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* VISÃO DESKTOP: TABELA COMPLETA */}
+              <Card className="glass hidden sm:block overflow-hidden rounded-xl border border-border/60">
+                <Table containerClassName="lg:max-h-[calc(100dvh-320px)]" className="w-full">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Vencimento</TableHead>
+                      <TableHead>Descrição</TableHead>
+                      <TableHead>Categoria</TableHead>
+                      <TableHead className="text-right">Valor</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-center">Baixa Rápida</TableHead>
+                      <TableHead className="text-right">Ações</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filtered.map((r) => {
+                      const isReceita = (r.type ?? "").toLowerCase() === "receber";
+                      const isAberto = (r.status ?? "").toLowerCase() === "aberto";
+
+                      return (
+                        <TableRow key={r.id} className="odd:bg-muted/15">
+                          <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                            {formatDateBR(r.due_date)}
+                          </TableCell>
+                          <TableCell>
+                            <div className="font-semibold text-sm">{r.description}</div>
+                            {r.payment_date && (
+                              <span className="text-[11px] text-muted-foreground">
+                                Pago em: {formatDateBR(r.payment_date)}
+                              </span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-xs text-muted-foreground">
+                            {r.category ? <Badge variant="secondary">{r.category}</Badge> : "—"}
+                          </TableCell>
+                          <TableCell
+                            className={`text-right font-extrabold ${
+                              isReceita ? "text-emerald-600" : "text-rose-600"
+                            }`}
+                          >
+                            {isReceita ? `+${formatBRL(r.amount)}` : `-${formatBRL(r.amount)}`}
+                          </TableCell>
+                          <TableCell>{renderStatusBadge(r)}</TableCell>
+                          <TableCell className="text-center">
+                            {isAberto ? (
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                className="h-7 text-xs border-emerald-500/40 text-emerald-600 hover:bg-emerald-500/10 gap-1.5"
+                                onClick={() => settleMutation.mutate(r)}
+                                disabled={settleMutation.isPending}
+                                title={isReceita ? "Confirmar recebimento" : "Confirmar pagamento"}
+                              >
+                                <Check className="h-3.5 w-3.5" />
+                                {isReceita ? "Receber" : "Pagar"}
+                              </Button>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">—</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="inline-flex items-center gap-1.5">
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                aria-label="Editar"
+                                onClick={() => openEditDialog(r)}
+                              >
+                                <Pencil className="h-3.5 w-3.5" />
+                              </Button>
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 text-destructive hover:bg-destructive/10"
+                                    aria-label="Excluir"
                                   >
-                                    Excluir
-                                  </AlertDialogAction>
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                            </AlertDialog>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </Card>
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Excluir lançamento financeiro?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      O título "{r.description}" de {formatBRL(r.amount)} será removido permanentemente.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                    <AlertDialogAction
+                                      onClick={() => deleteMutation.mutate(r.id)}
+                                      disabled={deleteMutation.isPending}
+                                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                    >
+                                      Excluir
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </Card>
+            </>
           )}
           </div>
         </TabsContent>

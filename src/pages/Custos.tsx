@@ -191,54 +191,112 @@ export default function Custos() {
                 </div>
               ) : (
                 <>
-                  <div className="flex sm:hidden items-center justify-between px-3 py-2 bg-muted/20 border-b border-border/40 text-[11px] text-muted-foreground -mx-6 -mt-2 mb-2">
-                    <span className="flex items-center gap-1 font-medium">
-                      ↔️ Arraste para o lado para ver margens e ações
-                    </span>
-                    <span className="font-semibold">{rows.length} produtos</span>
-                  </div>
-                  <Table containerClassName="lg:max-h-[calc(100dvh-320px)]" className="min-w-[680px] w-full">
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Produto</TableHead>
-                      <TableHead className="text-right">Custo (R$)</TableHead>
-                      <TableHead className="text-right">Preço Venda (R$)</TableHead>
-                      <TableHead className="text-right">Lucro Unitário (R$)</TableHead>
-                      <TableHead className="text-right">Margem (%)</TableHead>
-                      <TableHead className="text-right">Ação</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
+                  {/* VISÃO MOBILE: CARDS NATIVOS DE CUSTOS E MARGENS */}
+                  <div className="grid grid-cols-1 gap-2.5 sm:hidden -mx-2">
                     {rows.map((r) => {
                       const marginText = r.margin === null ? "—" : `${r.margin.toFixed(1)}%`;
                       return (
-                        <TableRow key={r.id} className="odd:bg-muted/20">
-                          <TableCell className="font-semibold">
-                            <div className="flex items-center gap-2">
-                              <span className="truncate">{r.name}</span>
-                              {!r.hasCost && <Badge variant="outline">Sem custo</Badge>}
+                        <div
+                          key={r.id}
+                          className="flex flex-col gap-2 rounded-xl border border-border/70 bg-card p-3.5 shadow-sm active:bg-muted/30 transition-colors"
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0 flex-1">
+                              <div className="font-semibold text-sm leading-tight text-foreground truncate">
+                                {r.name}
+                              </div>
+                              {!r.hasCost && (
+                                <div className="mt-1">
+                                  <Badge variant="outline" className="text-[10px] px-1 py-0 text-amber-600 border-amber-500/30">
+                                    Sem custo cadastrado
+                                  </Badge>
+                                </div>
+                              )}
                             </div>
-                          </TableCell>
-                          <TableCell className="text-right">{formatBRL(r.cost)}</TableCell>
-                          <TableCell className="text-right">{formatBRL(r.sale)}</TableCell>
-                          <TableCell className={"text-right font-bold " + (r.hasCost && r.profit < 0 ? "text-destructive" : "")}>{formatBRL(r.profit)}</TableCell>
-                          <TableCell className={"text-right font-bold " + marginClass(r.margin, r.hasCost)}>{marginText}</TableCell>
-                          <TableCell className="text-right">
                             <Button
                               type="button"
                               variant="outline"
                               size="sm"
+                              className="h-8 gap-1 text-xs shrink-0"
                               onClick={() => setEditing({ id: r.id, name: r.name, price_cost: r.price_cost, price_sale: r.price_sale })}
                             >
-                              <Pencil className="mr-2 h-4 w-4" />
-                              Editar Preço
+                              <Pencil className="h-3.5 w-3.5" />
+                              <span>Editar</span>
                             </Button>
-                          </TableCell>
-                        </TableRow>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-2 rounded-lg bg-muted/30 p-2 text-xs border border-border/40 mt-1">
+                            <div>
+                              <span className="text-[10px] text-muted-foreground block">Custo</span>
+                              <span className="font-medium text-foreground">{formatBRL(r.cost)}</span>
+                            </div>
+                            <div className="text-right">
+                              <span className="text-[10px] text-muted-foreground block">Preço de Venda</span>
+                              <span className="font-semibold text-foreground">{formatBRL(r.sale)}</span>
+                            </div>
+                            <div>
+                              <span className="text-[10px] text-muted-foreground block">Lucro Unitário</span>
+                              <span className={"font-bold " + (r.hasCost && r.profit < 0 ? "text-destructive" : "text-foreground")}>
+                                {formatBRL(r.profit)}
+                              </span>
+                            </div>
+                            <div className="text-right">
+                              <span className="text-[10px] text-muted-foreground block">Margem</span>
+                              <span className={"font-bold " + marginClass(r.margin, r.hasCost)}>
+                                {marginText}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
                       );
                     })}
-                  </TableBody>
-                </Table>
+                  </div>
+
+                  {/* VISÃO DESKTOP: TABELA COMPLETA */}
+                  <div className="hidden sm:block">
+                    <Table containerClassName="lg:max-h-[calc(100dvh-320px)]" className="w-full">
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Produto</TableHead>
+                          <TableHead className="text-right">Custo (R$)</TableHead>
+                          <TableHead className="text-right">Preço Venda (R$)</TableHead>
+                          <TableHead className="text-right">Lucro Unitário (R$)</TableHead>
+                          <TableHead className="text-right">Margem (%)</TableHead>
+                          <TableHead className="text-right">Ação</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {rows.map((r) => {
+                          const marginText = r.margin === null ? "—" : `${r.margin.toFixed(1)}%`;
+                          return (
+                            <TableRow key={r.id} className="odd:bg-muted/20">
+                              <TableCell className="font-semibold">
+                                <div className="flex items-center gap-2">
+                                  <span className="truncate">{r.name}</span>
+                                  {!r.hasCost && <Badge variant="outline">Sem custo</Badge>}
+                                </div>
+                              </TableCell>
+                              <TableCell className="text-right">{formatBRL(r.cost)}</TableCell>
+                              <TableCell className="text-right">{formatBRL(r.sale)}</TableCell>
+                              <TableCell className={"text-right font-bold " + (r.hasCost && r.profit < 0 ? "text-destructive" : "")}>{formatBRL(r.profit)}</TableCell>
+                              <TableCell className={"text-right font-bold " + marginClass(r.margin, r.hasCost)}>{marginText}</TableCell>
+                              <TableCell className="text-right">
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => setEditing({ id: r.id, name: r.name, price_cost: r.price_cost, price_sale: r.price_sale })}
+                                >
+                                  <Pencil className="mr-2 h-4 w-4" />
+                                  Editar Preço
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </div>
                 </>
               )}
             </CardContent>
