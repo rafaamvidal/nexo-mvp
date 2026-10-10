@@ -2,6 +2,8 @@ import * as React from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 
+import { clearSensitiveRhStorage } from "@/lib/rhStorage";
+
 type AuthContextValue = {
   session: Session | null;
   user: User | null;
@@ -58,6 +60,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signOut = React.useCallback(async () => {
+    clearSensitiveRhStorage();
     await supabase.auth.signOut();
   }, []);
 

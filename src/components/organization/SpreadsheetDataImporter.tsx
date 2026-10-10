@@ -30,88 +30,88 @@ import { useOrganization } from "@/contexts/OrganizationContext";
 import { toast } from "sonner";
 import { saveProductBom, type BomIngredient } from "@/lib/bom";
 
-// DADOS EXTRAÍDOS DIRETAMENTE DA PLANILHA EXCEL DO CLIENTE
+// DADOS DEMONSTRATIVOS/PADRÃO PARA IMPORTAÇÃO ERP (ANONIMIZADOS)
 const SPREADSHEET_SUPPLIERS = [
   {
-    name: "NEW PRINT ETIQUETAS",
-    document: "23.362.989/0001-89",
-    phone: "19 99699-9326",
-    email: "newprintetiquetas@hotmail.com",
-    address: "R. Antonio Bertolini, 305 - Jardim São Francisco - Sumaré - SP",
-    contact_name: "Ney",
-    observations: "[Fornece: Etiquetas personalizadas Don Juan] [Vendedor: Ney]",
+    name: "FORNECEDOR DE RÓTULOS E ETIQUETAS LTDA",
+    document: "00.000.001/0001-01",
+    phone: "11 3000-0001",
+    email: "contato@fornecedoretiquetas.exemplo.com",
+    address: "Distrito Industrial - São Paulo - SP",
+    contact_name: "Atendimento Comercial",
+    observations: "[Fornece: Etiquetas e Rótulos Personalizados]",
   },
   {
-    name: "DU PORTO INDUSTRIA ALIMENTICIA LTDA",
-    document: "72.845.068/0001-82",
-    phone: "15 3262-5050",
-    email: "",
-    address: "Av. dos Trabalhadores, 800 - Canguera - Porto Feliz - SP",
-    contact_name: "Thiago",
-    observations: "[Fornece: Ácido Cítrico e Amido de Milho] [Vendedor: Thiago]",
+    name: "DISTRIBUIDORA DE INSUMOS ALIMENTÍCIOS LTDA",
+    document: "00.000.002/0001-02",
+    phone: "11 3000-0002",
+    email: "comercial@distribuidorainsumos.exemplo.com",
+    address: "Distrito Industrial - Campinas - SP",
+    contact_name: "Suporte Vendas",
+    observations: "[Fornece: Ácido Cítrico e Amido de Milho]",
   },
   {
-    name: "MJC EMBALAGENS LTDA",
-    document: "",
-    phone: "",
-    email: "",
-    address: "",
-    contact_name: "",
+    name: "FABRICANTE DE EMBALAGENS LTDA",
+    document: "00.000.003/0001-03",
+    phone: "11 3000-0003",
+    email: "vendas@embalagensfrotas.exemplo.com",
+    address: "Área Industrial - Sorocaba - SP",
+    contact_name: "Representante Comercial",
     observations: "[Fornece: Caixas de Papelão e Embalagens de Transporte]",
   },
   {
-    name: "VOGLER",
-    document: "62.185.905/0001-30",
-    phone: "11 4393-4400",
-    email: "nicole.nascimento@vogler.com.br",
-    address: "Est. Particular Fukutaro Yida, 1155/1173 - Bairro Cooperativa - São Bernardo do Campo - SP",
-    contact_name: "Nicole Silva do Nascimento",
-    observations: "[Fornece: Ácido Cítrico, Sorbato de Potássio e Álcool] [Vendedor: Nicole Silva do Nascimento] Tel 2: 11 2626-4424",
+    name: "DISTRIBUIDORA QUÍMICA & ALIMENTÍCIA S.A.",
+    document: "00.000.004/0001-04",
+    phone: "11 3000-0004",
+    email: "pedidos@quimicaalimenticia.exemplo.com",
+    address: "Parque Empresarial - São Bernardo do Campo - SP",
+    contact_name: "Departamento Técnico",
+    observations: "[Fornece: Ácido Cítrico, Sorbato de Potássio e Álcool de Cereais]",
   },
   {
-    name: "D.A BRASIL DISTRIBUIÇÃO DE ALCOOL CINTIA",
-    document: "",
-    phone: "11 97221-6156",
-    email: "",
-    address: "",
-    contact_name: "Cintia",
-    observations: "[Fornece: Álcool de Cereal] [Vendedor: Cintia]",
+    name: "DISTRIBUIDORA DE ÁLCOOL E SOLVENTES LTDA",
+    document: "00.000.005/0001-05",
+    phone: "11 3000-0005",
+    email: "vendas@alcoolcereais.exemplo.com",
+    address: "Setor Logístico - São Paulo - SP",
+    contact_name: "Central de Vendas",
+    observations: "[Fornece: Álcool de Cereal]",
   },
   {
-    name: "WELINGTON PIZZI",
-    document: "",
-    phone: "",
-    email: "",
-    address: "",
-    contact_name: "Welington Pizzi",
-    observations: "[Fornece: Embalagens especiais] [Vendedor: Welington Pizzi]",
+    name: "FORNECEDOR DE EMBALAGENS ESPECIAIS",
+    document: "00.000.006/0001-06",
+    phone: "11 3000-0006",
+    email: "atendimento@embalagensespeciais.exemplo.com",
+    address: "Setor Industrial - Osasco - SP",
+    contact_name: "Consultor Técnico",
+    observations: "[Fornece: Embalagens especiais e berços para trufas]",
   },
   {
-    name: "REDE AMERIPAN FESTAS LTDA",
-    document: "04.615.098/0003-04",
-    phone: "",
-    email: "",
-    address: "Av. Governador Pedro de Toledo, 2720 - Bonfim - Campinas - SP",
-    contact_name: "",
-    observations: "[Fornece: Creme Culinário Bravo e Insumos de Confeitaria]",
+    name: "COMERCIAL ATACADISTA DE CONFEITARIA",
+    document: "00.000.007/0001-07",
+    phone: "11 3000-0007",
+    email: "vendas@confeitariaatacado.exemplo.com",
+    address: "Distrito Comercial - Campinas - SP",
+    contact_name: "Atendimento Grandes Contas",
+    observations: "[Fornece: Creme Culinário e Insumos de Confeitaria]",
   },
   {
-    name: "NEVADO",
-    document: "",
-    phone: "",
-    email: "",
-    address: "",
-    contact_name: "",
+    name: "INDÚSTRIA DE CHOCOLATES E COBERTURAS LTDA",
+    document: "00.000.008/0001-08",
+    phone: "11 3000-0008",
+    email: "pedidos@chocolatesecoberturas.exemplo.com",
+    address: "Parque Industrial - Guarulhos - SP",
+    contact_name: "Representação",
     observations: "[Fornece: Chocolates, Coberturas e Recheios Trufados]",
   },
   {
-    name: "GLOBAL EMBALAGENS",
-    document: "11.227.542/0001-37",
-    phone: "",
-    email: "",
-    address: "Av. Dr. Antonio Pires de Almeida, 880, Centro - Porto Feliz - SP",
-    contact_name: "",
-    observations: "[Fornece: Utensílios gerais de fábrica e Embalagens]",
+    name: "GLOBAL SUPRIMENTOS INDUSTRIAIS LTDA",
+    document: "00.000.009/0001-09",
+    phone: "11 3000-0009",
+    email: "suprimentos@globalindustriais.exemplo.com",
+    address: "Centro Logístico - Porto Feliz - SP",
+    contact_name: "Canal Corporativo",
+    observations: "[Fornece: Utensílios gerais de fábrica e Acessórios]",
   },
 ];
 
@@ -225,7 +225,7 @@ const SPREADSHEET_FINISHED_PRODUCTS = [
 const SPREADSHEET_FINANCIAL_RECORDS = [
   {
     type: "Pagar",
-    description: "COMPRA DE 289,60 ETIQUETAS (New Print)",
+    description: "COMPRA DE 289,60 ETIQUETAS",
     category: "MATÉRIA PRIMA",
     amount: 4633.6,
     due_date: new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10),
@@ -233,7 +233,7 @@ const SPREADSHEET_FINANCIAL_RECORDS = [
   },
   {
     type: "Pagar",
-    description: "COMPRA DE 25 KG DE ACIDO CITRICO (Du Porto)",
+    description: "COMPRA DE 25 KG DE ACIDO CITRICO",
     category: "MATÉRIA PRIMA",
     amount: 512.64,
     due_date: new Date(Date.now() - 25 * 86400000).toISOString().slice(0, 10),
@@ -241,7 +241,7 @@ const SPREADSHEET_FINANCIAL_RECORDS = [
   },
   {
     type: "Pagar",
-    description: "COMPRA DE 200 KG DE AMIDO DE MILHO (Du Porto)",
+    description: "COMPRA DE 200 KG DE AMIDO DE MILHO",
     category: "MATÉRIA PRIMA",
     amount: 1054.08,
     due_date: new Date(Date.now() - 25 * 86400000).toISOString().slice(0, 10),
@@ -249,7 +249,7 @@ const SPREADSHEET_FINANCIAL_RECORDS = [
   },
   {
     type: "Pagar",
-    description: "COMPRA DE 1586 UNIDADES DE CAIXA DE PAPELÃO (MJC)",
+    description: "COMPRA DE 1586 UNIDADES DE CAIXA DE PAPELÃO",
     category: "MATÉRIA PRIMA",
     amount: 3092.7,
     due_date: new Date(Date.now() - 20 * 86400000).toISOString().slice(0, 10),
@@ -265,7 +265,7 @@ const SPREADSHEET_FINANCIAL_RECORDS = [
   },
   {
     type: "Pagar",
-    description: "COMPRA DE 26 KG DE LECETINA DE SOJA (Nevado)",
+    description: "COMPRA DE 26 KG DE LECETINA DE SOJA",
     category: "MATÉRIA PRIMA",
     amount: 390.0,
     due_date: new Date(Date.now() - 10 * 86400000).toISOString().slice(0, 10),
@@ -273,7 +273,7 @@ const SPREADSHEET_FINANCIAL_RECORDS = [
   },
   {
     type: "Pagar",
-    description: "COMPRA DE 250 KG DE COBERTURA SAB CHOC (Nevado)",
+    description: "COMPRA DE 250 KG DE COBERTURA SAB CHOC",
     category: "MATÉRIA PRIMA",
     amount: 4000.0,
     due_date: new Date(Date.now() - 8 * 86400000).toISOString().slice(0, 10),
@@ -281,7 +281,7 @@ const SPREADSHEET_FINANCIAL_RECORDS = [
   },
   {
     type: "Pagar",
-    description: "COMPRA DE 500 KG DE COBERTURA SAB CHOC (Nevado)",
+    description: "COMPRA DE 500 KG DE COBERTURA SAB CHOC",
     category: "MATÉRIA PRIMA",
     amount: 8000.0,
     due_date: new Date(Date.now() + 10 * 86400000).toISOString().slice(0, 10),
@@ -289,7 +289,7 @@ const SPREADSHEET_FINANCIAL_RECORDS = [
   },
   {
     type: "Pagar",
-    description: "COMPRA DE 400 KG RECHEIO BRANCO BASE MOLE (Nevado)",
+    description: "COMPRA DE 400 KG RECHEIO BRANCO BASE MOLE",
     category: "MATÉRIA PRIMA",
     amount: 5600.0,
     due_date: new Date(Date.now() + 15 * 86400000).toISOString().slice(0, 10),
@@ -523,11 +523,11 @@ export function SpreadsheetDataImporter() {
               <div className="grid gap-1">
                 <Label htmlFor="imp-suppliers" className="text-sm font-semibold flex items-center gap-2 cursor-pointer">
                   <Truck className="h-4 w-4 text-primary" />
-                  10 Fornecedores Cadastrados
-                  <Badge variant="outline" className="text-[10px]">New Print, Du Porto, Nevado...</Badge>
+                  Fornecedores Cadastrados
+                  <Badge variant="outline" className="text-[10px]">Embalagens, Insumos, Matéria-Prima</Badge>
                 </Label>
                 <p className="text-xs text-muted-foreground">
-                  Inclui CNPJs, telefones de vendedores (Ney, Thiago, Nicole) e endereços completos.
+                  Cadastros com contatos comerciais, categorias de fornecimento e dados fiscais.
                 </p>
               </div>
             </div>

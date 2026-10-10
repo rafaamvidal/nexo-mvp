@@ -2,9 +2,31 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Employee, EmployeeVacation, EmployeeOccurrence, VacationPeriodInfo } from "@/types/rh";
 import { addMonths, differenceInDays, format, isAfter, isBefore, parseISO, subDays } from "date-fns";
 
-const EMPLOYEES_STORAGE_KEY = (orgId: string) => `agilix_employees_${orgId}`;
-const VACATIONS_STORAGE_KEY = (orgId: string) => `agilix_vacations_${orgId}`;
-const OCCURRENCES_STORAGE_KEY = (orgId: string) => `agilix_occurrences_${orgId}`;
+/**
+ * Limpa qualquer resquício legado de dados de RH armazenados indevidamente no localStorage.
+ * Por segurança e LGPD, dados como CPF, salários e contas bancárias NUNCA devem ficar em localStorage.
+ */
+export function clearSensitiveRhStorage(): void {
+  try {
+    if (typeof localStorage === "undefined") return;
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const key = localStorage.key(i);
+      if (
+        key &&
+        (key.startsWith("agilix_employees_") ||
+          key.startsWith("agilix_vacations_") ||
+          key.startsWith("agilix_occurrences_"))
+      ) {
+        localStorage.removeItem(key);
+      }
+    }
+  } catch {
+    // Ignore storage errors em ambientes restritos
+  }
+}
+
+// Executa limpeza preventiva imediata
+clearSensitiveRhStorage();
 
 // ==============================================================================
 // 1. GESTÃO DE COLABORADORES (EMPLOYEES)
@@ -13,33 +35,17 @@ const OCCURRENCES_STORAGE_KEY = (orgId: string) => `agilix_occurrences_${orgId}`
 export async function fetchEmployees(orgId?: string): Promise<Employee[]> {
   if (!orgId) return [];
 
-  try {
-    const { data, error } = await (supabase.from("employees") as any)
-      .select("*")
-      .eq("organization_id", orgId)
-      .order("name", { ascending: true });
+  const { data, error } = await (supabase.from("employees") as any)
+    .select("*")
+    .eq("organization_id", orgId)
+    .order("name", { ascending: true });
 
-    if (!error && data) {
-      // Salva cópia em cache local
-      localStorage.setItem(EMPLOYEES_STORAGE_KEY(orgId), JSON.stringify(data));
-      return data as Employee[];
-    }
-  } catch (err) {
-    // Segue para fallback
+  if (error) {
+    console.warn("Aviso ao buscar colaboradores no Supabase:", error);
+    return [];
   }
 
-  // Fallback para localStorage
-  const local = localStorage.getItem(EMPLOYEES_STORAGE_KEY(orgId));
-  if (local) {
-    try {
-      const parsed = JSON.parse(local);
-      if (Array.isArray(parsed)) return parsed;
-    } catch {
-      // Ignore
-    }
-  }
-
-  return [];
+  return (data ?? []) as Employee[];
 }
 
 export async function upsertEmployee(employee: Partial<Employee>, orgId: string): Promise<Employee> {
@@ -58,46 +64,21 @@ export async function upsertEmployee(employee: Partial<Employee>, orgId: string)
     payload.created_at = now;
   }
 
-  // 1. Tenta salvar no Supabase
-  try {
-    const query = isUpdate
-      ? (supabase.from("employees") as any).update(payload).eq("id", employee.id!)
-      : (supabase.from("employees") as any).insert(payload);
+  const query = isUpdate
+    ? (supabase.from("employees") as any).update(payload).eq("id", employee.id!)
+    : (supabase.from("employees") as any).insert(payload);
 
-    const { data, error } = await query.select().single();
-    if (!error && data) {
-      await updateLocalEmployee(data, orgId);
-      return data;
-    }
-  } catch (err) {
-    // Segue para fallback
-  }
-
-  // 2. Fallback no localStorage
-  await updateLocalEmployee(payload, orgId);
-  return payload as Employee;
-}
-
-async function updateLocalEmployee(emp: Employee, orgId: string) {
-  const list = await fetchEmployees(orgId);
-  const index = list.findIndex((e) => e.id === emp.id);
-  if (index >= 0) {
-    list[index] = { ...list[index], ...emp };
-  } else {
-    list.unshift(emp);
-  }
-  localStorage.setItem(EMPLOYEES_STORAGE_KEY(orgId), JSON.stringify(list));
+  const { data, error } = await query.select().single();
+  if (error) throw error;
+  return data as Employee;
 }
 
 export async function deleteEmployee(id: string, orgId: string): Promise<void> {
-  try {
-    await (supabase.from("employees") as any).delete().eq("id", id);
-  } catch {
-    // Ignore
-  }
-
-  const list = (await fetchEmployees(orgId)).filter((e) => e.id !== id);
-  localStorage.setItem(EMPLOYEES_STORAGE_KEY(orgId), JSON.stringify(list));
+  const { error } = await (supabase.from("employees") as any)
+    .delete()
+    .eq("id", id)
+    .eq("organization_id", orgId);
+  if (error) throw error;
 }
 
 // ==============================================================================
@@ -107,37 +88,22 @@ export async function deleteEmployee(id: string, orgId: string): Promise<void> {
 export async function fetchVacations(orgId?: string): Promise<EmployeeVacation[]> {
   if (!orgId) return [];
 
-  try {
-    const { data, error } = await (supabase.from("employee_vacations") as any)
-      .select("*, employees(name, role, department)")
-      .eq("organization_id", orgId)
-      .order("start_date", { ascending: false });
+  const { data, error } = await (supabase.from("employee_vacations") as any)
+    .select("*, employees(name, role, department)")
+    .eq("organization_id", orgId)
+    .order("start_date", { ascending: false });
 
-    if (!error && data) {
-      const enriched: EmployeeVacation[] = data.map((v: any) => ({
-        ...v,
-        employee_name: v.employees?.name,
-        employee_role: v.employees?.role,
-        employee_department: v.employees?.department,
-      }));
-      localStorage.setItem(VACATIONS_STORAGE_KEY(orgId), JSON.stringify(enriched));
-      return enriched;
-    }
-  } catch {
-    // Fallback
+  if (error) {
+    console.warn("Aviso ao buscar férias no Supabase:", error);
+    return [];
   }
 
-  const local = localStorage.getItem(VACATIONS_STORAGE_KEY(orgId));
-  if (local) {
-    try {
-      const parsed = JSON.parse(local);
-      if (Array.isArray(parsed)) return parsed;
-    } catch {
-      // Ignore
-    }
-  }
-
-  return [];
+  return (data ?? []).map((v: any) => ({
+    ...v,
+    employee_name: v.employees?.name,
+    employee_role: v.employees?.role,
+    employee_department: v.employees?.department,
+  }));
 }
 
 export async function upsertVacation(vacation: Partial<EmployeeVacation>, orgId: string): Promise<EmployeeVacation> {
@@ -160,44 +126,21 @@ export async function upsertVacation(vacation: Partial<EmployeeVacation>, orgId:
   delete payload.employee_role;
   delete payload.employee_department;
 
-  try {
-    const query = isUpdate
-      ? (supabase.from("employee_vacations") as any).update(payload).eq("id", vacation.id!)
-      : (supabase.from("employee_vacations") as any).insert(payload);
+  const query = isUpdate
+    ? (supabase.from("employee_vacations") as any).update(payload).eq("id", vacation.id!)
+    : (supabase.from("employee_vacations") as any).insert(payload);
 
-    const { data, error } = await query.select().single();
-    if (!error && data) {
-      await updateLocalVacation(data, orgId);
-      return data;
-    }
-  } catch {
-    // Fallback
-  }
-
-  await updateLocalVacation(payload, orgId);
-  return payload as EmployeeVacation;
-}
-
-async function updateLocalVacation(vac: EmployeeVacation, orgId: string) {
-  const list = await fetchVacations(orgId);
-  const index = list.findIndex((v) => v.id === vac.id);
-  if (index >= 0) {
-    list[index] = { ...list[index], ...vac };
-  } else {
-    list.unshift(vac);
-  }
-  localStorage.setItem(VACATIONS_STORAGE_KEY(orgId), JSON.stringify(list));
+  const { data, error } = await query.select().single();
+  if (error) throw error;
+  return data as EmployeeVacation;
 }
 
 export async function deleteVacation(id: string, orgId: string): Promise<void> {
-  try {
-    await (supabase.from("employee_vacations") as any).delete().eq("id", id);
-  } catch {
-    // Ignore
-  }
-
-  const list = (await fetchVacations(orgId)).filter((v) => v.id !== id);
-  localStorage.setItem(VACATIONS_STORAGE_KEY(orgId), JSON.stringify(list));
+  const { error } = await (supabase.from("employee_vacations") as any)
+    .delete()
+    .eq("id", id)
+    .eq("organization_id", orgId);
+  if (error) throw error;
 }
 
 /**
@@ -248,35 +191,20 @@ export function calculateVacationPeriod(admissionDateStr: string, existingVacati
 export async function fetchOccurrences(orgId?: string): Promise<EmployeeOccurrence[]> {
   if (!orgId) return [];
 
-  try {
-    const { data, error } = await (supabase.from("employee_occurrences") as any)
-      .select("*, employees(name)")
-      .eq("organization_id", orgId)
-      .order("date", { ascending: false });
+  const { data, error } = await (supabase.from("employee_occurrences") as any)
+    .select("*, employees(name)")
+    .eq("organization_id", orgId)
+    .order("date", { ascending: false });
 
-    if (!error && data) {
-      const enriched: EmployeeOccurrence[] = data.map((o: any) => ({
-        ...o,
-        employee_name: o.employees?.name,
-      }));
-      localStorage.setItem(OCCURRENCES_STORAGE_KEY(orgId), JSON.stringify(enriched));
-      return enriched;
-    }
-  } catch {
-    // Fallback
+  if (error) {
+    console.warn("Aviso ao buscar ocorrências no Supabase:", error);
+    return [];
   }
 
-  const local = localStorage.getItem(OCCURRENCES_STORAGE_KEY(orgId));
-  if (local) {
-    try {
-      const parsed = JSON.parse(local);
-      if (Array.isArray(parsed)) return parsed;
-    } catch {
-      // Ignore
-    }
-  }
-
-  return [];
+  return (data ?? []).map((o: any) => ({
+    ...o,
+    employee_name: o.employees?.name,
+  }));
 }
 
 export async function upsertOccurrence(occurrence: Partial<EmployeeOccurrence>, orgId: string): Promise<EmployeeOccurrence> {
@@ -293,44 +221,21 @@ export async function upsertOccurrence(occurrence: Partial<EmployeeOccurrence>, 
 
   delete payload.employee_name;
 
-  try {
-    const query = isUpdate
-      ? (supabase.from("employee_occurrences") as any).update(payload).eq("id", occurrence.id!)
-      : (supabase.from("employee_occurrences") as any).insert(payload);
+  const query = isUpdate
+    ? (supabase.from("employee_occurrences") as any).update(payload).eq("id", occurrence.id!)
+    : (supabase.from("employee_occurrences") as any).insert(payload);
 
-    const { data, error } = await query.select().single();
-    if (!error && data) {
-      await updateLocalOccurrence(data, orgId);
-      return data;
-    }
-  } catch {
-    // Fallback
-  }
-
-  await updateLocalOccurrence(payload, orgId);
-  return payload as EmployeeOccurrence;
-}
-
-async function updateLocalOccurrence(occ: EmployeeOccurrence, orgId: string) {
-  const list = await fetchOccurrences(orgId);
-  const index = list.findIndex((o) => o.id === occ.id);
-  if (index >= 0) {
-    list[index] = { ...list[index], ...occ };
-  } else {
-    list.unshift(occ);
-  }
-  localStorage.setItem(OCCURRENCES_STORAGE_KEY(orgId), JSON.stringify(list));
+  const { data, error } = await query.select().single();
+  if (error) throw error;
+  return data as EmployeeOccurrence;
 }
 
 export async function deleteOccurrence(id: string, orgId: string): Promise<void> {
-  try {
-    await (supabase.from("employee_occurrences") as any).delete().eq("id", id);
-  } catch {
-    // Ignore
-  }
-
-  const list = (await fetchOccurrences(orgId)).filter((o) => o.id !== id);
-  localStorage.setItem(OCCURRENCES_STORAGE_KEY(orgId), JSON.stringify(list));
+  const { error } = await (supabase.from("employee_occurrences") as any)
+    .delete()
+    .eq("id", id)
+    .eq("organization_id", orgId);
+  if (error) throw error;
 }
 
 // ==============================================================================
