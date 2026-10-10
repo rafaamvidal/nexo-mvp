@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Download, Pencil, Plus, Printer, Search, ShoppingCart, Trash2 } from "lucide-react";
+import { Download, MessageCircle, Pencil, Plus, Printer, Search, ShoppingCart, Trash2 } from "lucide-react";
 
 import { AppShell } from "@/components/layout/AppShell";
 import { Button } from "@/components/ui/button";
@@ -31,7 +31,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { isForeignKeyViolation, toastDeleteBlocked } from "@/lib/supabaseErrors";
 import { useOrganization } from "@/contexts/OrganizationContext";
-import { formatDateBR } from "@/lib/masks";
+import { formatDateBR, getWhatsAppUrl } from "@/lib/masks";
 
 function formatBRL(value: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
@@ -43,7 +43,7 @@ type SaleRow = {
   code: string | null;
   status: string | null;
   total_amount: number | null;
-  clients?: { name: string | null } | null;
+  clients?: { name: string | null; phone?: string | null } | null;
   client_id?: string | null;
   observations?: string | null;
 };
@@ -132,7 +132,7 @@ async function upsertReceberForSale(params: {
 async function fetchSales(orgId?: string): Promise<SaleRow[]> {
   let query = supabase
     .from("sales")
-    .select("id,created_at,code,status,total_amount,client_id,observations,clients(name)")
+    .select("id,created_at,code,status,total_amount,client_id,observations,clients(name,phone)")
     .order("created_at", { ascending: false });
 
   if (orgId) query = query.eq("organization_id", orgId);
@@ -828,6 +828,28 @@ export default function Vendas() {
                     </div>
 
                     <div className="flex items-center justify-end gap-1 border-t border-border/40 pt-2 text-xs">
+                      {s.clients?.phone && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 gap-1 text-xs text-emerald-600 hover:text-emerald-700 hover:bg-emerald-500/10"
+                          asChild
+                        >
+                          <a
+                            href={getWhatsAppUrl(
+                              s.clients.phone,
+                              `Olá ${s.clients.name ?? "Cliente"}, segue a confirmação do seu pedido #${s.code ?? s.id.slice(0, 8)} no valor de ${formatBRL(Number(s.total_amount ?? 0))}.`
+                            ) ?? "#"}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            title="Enviar WhatsApp"
+                          >
+                            <MessageCircle className="h-3.5 w-3.5" />
+                            <span>WhatsApp</span>
+                          </a>
+                        </Button>
+                      )}
                       <Button
                         type="button"
                         variant="ghost"
@@ -912,6 +934,28 @@ export default function Vendas() {
                         <TableCell className="text-right font-bold">{formatBRL(Number(s.total_amount ?? 0))}</TableCell>
                         <TableCell className="text-right">
                           <div className="inline-flex items-center gap-2">
+                            {s.clients?.phone && (
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="icon"
+                                className="border-emerald-500/30 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-500/10"
+                                aria-label="Enviar WhatsApp"
+                                title="Enviar confirmação por WhatsApp"
+                                asChild
+                              >
+                                <a
+                                  href={getWhatsAppUrl(
+                                    s.clients.phone,
+                                    `Olá ${s.clients.name ?? "Cliente"}, segue a confirmação do seu pedido #${s.code ?? s.id.slice(0, 8)} no valor de ${formatBRL(Number(s.total_amount ?? 0))}.`
+                                  ) ?? "#"}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                >
+                                  <MessageCircle className="h-4 w-4" />
+                                </a>
+                              </Button>
+                            )}
                             <Button
                               type="button"
                               variant="outline"

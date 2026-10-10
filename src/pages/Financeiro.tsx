@@ -419,6 +419,7 @@ export default function Financeiro() {
     const d15 = new Date(now.getTime() + 15 * 86400000).toISOString().slice(0, 10);
     const d30 = new Date(now.getTime() + 30 * 86400000).toISOString().slice(0, 10);
     const d60 = new Date(now.getTime() + 60 * 86400000).toISOString().slice(0, 10);
+    const d90 = new Date(now.getTime() + 90 * 86400000).toISOString().slice(0, 10);
 
     const calcBucket = (maxDate: string) => {
       let ent = 0;
@@ -441,6 +442,7 @@ export default function Financeiro() {
       d15: calcBucket(d15),
       d30: calcBucket(d30),
       d60: calcBucket(d60),
+      d90: calcBucket(d90),
     };
   }, [data, todayStr]);
 
@@ -1733,12 +1735,13 @@ export default function Financeiro() {
 
           {/* FLUXO PROJETADO */}
           <TabsContent value="fluxo" className="mt-4 space-y-4">
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
               {[
                 { label: "Próximos 7 Dias", data: cashflow.d7 },
                 { label: "Próximos 15 Dias", data: cashflow.d15 },
                 { label: "Próximos 30 Dias", data: cashflow.d30 },
                 { label: "Próximos 60 Dias", data: cashflow.d60 },
+                { label: "Próximos 90 Dias", data: cashflow.d90 },
               ].map((item, idx) => (
                 <Card key={idx} className="glass border-border/60">
                   <CardHeader className="pb-2">

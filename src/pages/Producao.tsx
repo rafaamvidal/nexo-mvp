@@ -101,9 +101,13 @@ export default function Producao() {
   const [quantity, setQuantity] = React.useState<number>(1);
   const [createDirectFinalized, setCreateDirectFinalized] = React.useState<boolean>(false);
   const [createSkipBom, setCreateSkipBom] = React.useState<boolean>(false);
+  const [createBatchCode, setCreateBatchCode] = React.useState<string>("");
+  const [createExpiryDate, setCreateExpiryDate] = React.useState<string>("");
 
   const [finalizeTarget, setFinalizeTarget] = React.useState<ManufacturingOrderRow | null>(null);
   const [finalizeSkipBom, setFinalizeSkipBom] = React.useState<boolean>(false);
+  const [finalizeBatchCode, setFinalizeBatchCode] = React.useState<string>("");
+  const [finalizeExpiryDate, setFinalizeExpiryDate] = React.useState<string>("");
 
   const [editOpen, setEditOpen] = React.useState(false);
   const [editing, setEditing] = React.useState<ManufacturingOrderRow | null>(null);
@@ -164,15 +168,22 @@ export default function Producao() {
 
       if (isFin && newMo) {
         const codeOrId = (newMo as any).code ?? (newMo as any).id.slice(0, 8);
+        const batchInfo = [
+          createBatchCode.trim() ? `Lote: ${createBatchCode.trim()}` : null,
+          createExpiryDate.trim() ? `Val: ${createExpiryDate.trim().split("-").reverse().join("/")}` : null,
+        ].filter(Boolean).join(" | ");
+
+        const reasonPrefix = createSkipBom
+          ? `Produção Concluída (Sem baixa de insumos) (OF #${codeOrId})`
+          : `Produção Finalizada (OF #${codeOrId})`;
+        const fullReason = batchInfo ? `${reasonPrefix} [${batchInfo}]` : reasonPrefix;
 
         // 1. Entrada no produto final fabricado
         const { error: mvErr } = await (supabase as any).rpc("apply_movement", {
           p_product_id: productId,
           p_type: "Entrada",
           p_quantity: orderQty,
-          p_reason: createSkipBom
-            ? `Produção Concluída (Sem baixa de insumos) (OF #${codeOrId})`
-            : `Produção Finalizada (OF #${codeOrId})`,
+          p_reason: fullReason,
           p_reference_id: (newMo as any).id,
         });
         if (mvErr) throw mvErr;
@@ -208,6 +219,8 @@ export default function Producao() {
       setQuantity(1);
       setCreateDirectFinalized(false);
       setCreateSkipBom(false);
+      setCreateBatchCode("");
+      setCreateExpiryDate("");
       await qc.invalidateQueries({ queryKey: ["manufacturing_orders"] });
       await qc.invalidateQueries({ queryKey: ["products"] });
       await qc.invalidateQueries({ queryKey: ["stock_movements"] });
@@ -231,21 +244,38 @@ export default function Producao() {
   });
 
   const finalizeMO = useMutation({
-    mutationFn: async ({ mo, skipBom }: { mo: ManufacturingOrderRow; skipBom: boolean }) => {
+    mutationFn: async ({
+      mo,
+      skipBom,
+      batchCode,
+      expiryDate,
+    }: {
+      mo: ManufacturingOrderRow;
+      skipBom: boolean;
+      batchCode?: string;
+      expiryDate?: string;
+    }) => {
       if (!mo.product_id) throw new Error("Ordem sem produto");
       if ((mo.status ?? "") === "Finalizada") return;
 
       const orderQty = Number(mo.quantity ?? 0);
       const codeOrId = mo.code ?? mo.id.slice(0, 8);
+      const batchInfo = [
+        batchCode?.trim() ? `Lote: ${batchCode.trim()}` : null,
+        expiryDate?.trim() ? `Val: ${expiryDate.trim().split("-").reverse().join("/")}` : null,
+      ].filter(Boolean).join(" | ");
+
+      const reasonPrefix = skipBom
+        ? `Produção Finalizada (Sem baixa de insumos) (OF #${codeOrId})`
+        : `Produção Finalizada (OF #${codeOrId})`;
+      const fullReason = batchInfo ? `${reasonPrefix} [${batchInfo}]` : reasonPrefix;
 
       // 1. Dá entrada no produto final fabricado
       const { error: mvErr } = await (supabase as any).rpc("apply_movement", {
         p_product_id: mo.product_id,
         p_type: "Entrada",
         p_quantity: orderQty,
-        p_reason: skipBom
-          ? `Produção Finalizada (Sem baixa de insumos) (OF #${codeOrId})`
-          : `Produção Finalizada (OF #${codeOrId})`,
+        p_reason: fullReason,
         p_reference_id: mo.id,
       });
       if (mvErr) throw mvErr;
@@ -285,6 +315,8 @@ export default function Producao() {
       );
       setFinalizeTarget(null);
       setFinalizeSkipBom(false);
+      setFinalizeBatchCode("");
+      setFinalizeExpiryDate("");
       await qc.invalidateQueries({ queryKey: ["manufacturing_orders"] });
       await qc.invalidateQueries({ queryKey: ["products"] });
       await qc.invalidateQueries({ queryKey: ["stock_movements"] });
@@ -461,23 +493,48 @@ export default function Producao() {
                       </div>
 
                       {createDirectFinalized && (
-                        <div className="pl-6 pt-1 space-y-1.5 border-t border-border/40">
-                          <div className="flex items-center space-x-2">
-                            <Checkbox
-                              id="create-skip-bom"
-                              checked={createSkipBom}
-                              onCheckedChange={(c) => setCreateSkipBom(Boolean(c))}
-                            />
-                            <label
-                              htmlFor="create-skip-bom"
-                              className="text-xs font-semibold leading-none cursor-pointer text-amber-600 dark:text-amber-400"
-                            >
-                              Não descontar insumos da Ficha Técnica (ingredientes consumidos anteriormente)
-                            </label>
+                        <div className="pl-6 pt-2 space-y-3 border-t border-border/40">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            <div className="grid gap-1">
+                              <Label htmlFor="create-batch" className="text-xs">Número do Lote (opcional)</Label>
+                              <Input
+                                id="create-batch"
+                                placeholder="Ex: LOT-2026-04"
+                                value={createBatchCode}
+                                onChange={(e) => setCreateBatchCode(e.target.value)}
+                                className="h-8 text-xs"
+                              />
+                            </div>
+                            <div className="grid gap-1">
+                              <Label htmlFor="create-exp" className="text-xs">Data de Validade (opcional)</Label>
+                              <Input
+                                id="create-exp"
+                                type="date"
+                                value={createExpiryDate}
+                                onChange={(e) => setCreateExpiryDate(e.target.value)}
+                                className="h-8 text-xs"
+                              />
+                            </div>
                           </div>
-                          <p className="text-[11px] text-muted-foreground leading-relaxed">
-                            Ideal para produções desta semana feitas com matérias-primas que não foram lançadas no sistema.
-                          </p>
+
+                          <div className="space-y-1.5 pt-1">
+                            <div className="flex items-center space-x-2">
+                              <Checkbox
+                                id="create-skip-bom"
+                                checked={createSkipBom}
+                                onCheckedChange={(c) => setCreateSkipBom(Boolean(c))}
+                              />
+                              <label
+                                htmlFor="create-skip-bom"
+                                className="text-xs font-semibold leading-none cursor-pointer text-amber-600 dark:text-amber-400"
+                              >
+                                Não descontar insumos da Ficha Técnica (ingredientes consumidos anteriormente)
+                              </label>
+                            </div>
+                            <p className="text-[11px] text-muted-foreground leading-relaxed">
+                              Ideal para produções desta semana feitas com matérias-primas que não foram lançadas no sistema.
+                            </p>
+                          </div>
                         </div>
                       )}
                     </div>
@@ -818,6 +875,29 @@ export default function Producao() {
                   ?
                 </p>
 
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <div className="grid gap-1">
+                    <Label htmlFor="fin-batch" className="text-xs">Número do Lote (opcional)</Label>
+                    <Input
+                      id="fin-batch"
+                      placeholder="Ex: LOT-2026-04"
+                      value={finalizeBatchCode}
+                      onChange={(e) => setFinalizeBatchCode(e.target.value)}
+                      className="h-8 text-xs"
+                    />
+                  </div>
+                  <div className="grid gap-1">
+                    <Label htmlFor="fin-exp" className="text-xs">Data de Validade (opcional)</Label>
+                    <Input
+                      id="fin-exp"
+                      type="date"
+                      value={finalizeExpiryDate}
+                      onChange={(e) => setFinalizeExpiryDate(e.target.value)}
+                      className="h-8 text-xs"
+                    />
+                  </div>
+                </div>
+
                 <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 space-y-2">
                   <div className="flex items-center space-x-2.5">
                     <Checkbox
@@ -851,7 +931,12 @@ export default function Producao() {
                     variant="hero"
                     onClick={() => {
                       if (finalizeTarget) {
-                        finalizeMO.mutate({ mo: finalizeTarget, skipBom: finalizeSkipBom });
+                        finalizeMO.mutate({
+                          mo: finalizeTarget,
+                          skipBom: finalizeSkipBom,
+                          batchCode: finalizeBatchCode,
+                          expiryDate: finalizeExpiryDate,
+                        });
                       }
                     }}
                     disabled={finalizeMO.isPending}
