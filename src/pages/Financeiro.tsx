@@ -34,7 +34,16 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectSeparator,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -81,6 +90,36 @@ async function fetchFinancial(orgId?: string): Promise<FinRow[]> {
   return (data ?? []) as any;
 }
 
+const DEFAULT_INCOME_CATEGORIES = [
+  "Vendas",
+  "Prestação de Serviços",
+  "Rendimentos / Aplicações",
+  "Aportes / Empréstimos",
+  "Recebimentos Diversos",
+  "Outras Receitas",
+];
+
+const DEFAULT_EXPENSE_CATEGORIES = [
+  "Matéria-Prima",
+  "Insumos",
+  "Embalagens",
+  "Fornecedores",
+  "Salários / RH",
+  "Pró-Labore",
+  "Aluguel",
+  "Energia Elétrica",
+  "Água / Gás",
+  "Internet / Telefone",
+  "Impostos / Tributos",
+  "Manutenção",
+  "Marketing e Vendas",
+  "Frete e Logística",
+  "Contabilidade",
+  "Tarifas Bancárias",
+  "Despesas Operacionais",
+  "Outras Despesas",
+];
+
 export default function Financeiro() {
   const qc = useQueryClient();
   const { currentOrg } = useOrganization();
@@ -113,6 +152,7 @@ export default function Financeiro() {
   const [type, setType] = React.useState<string>("Receber");
   const [description, setDescription] = React.useState<string>("");
   const [category, setCategory] = React.useState<string>("");
+  const [isCustomCategory, setIsCustomCategory] = React.useState<boolean>(false);
   const [amount, setAmount] = React.useState<number>(0);
   const [dueDate, setDueDate] = React.useState<string>(new Date().toISOString().slice(0, 10));
   const [paymentDate, setPaymentDate] = React.useState<string>(new Date().toISOString().slice(0, 10));
@@ -122,6 +162,7 @@ export default function Financeiro() {
   const [editType, setEditType] = React.useState<string>("Receber");
   const [editDescription, setEditDescription] = React.useState<string>("");
   const [editCategory, setEditCategory] = React.useState<string>("");
+  const [isEditCustomCategory, setIsEditCustomCategory] = React.useState<boolean>(false);
   const [editAmount, setEditAmount] = React.useState<number>(0);
   const [editDueDate, setEditDueDate] = React.useState<string>(new Date().toISOString().slice(0, 10));
   const [editPaymentDate, setEditPaymentDate] = React.useState<string>(new Date().toISOString().slice(0, 10));
@@ -202,6 +243,46 @@ export default function Financeiro() {
     }
     return Array.from(set).sort();
   }, [data]);
+
+  // Opções de categorias para criação (filtradas pelo tipo selecionado + cadastradas)
+  const createCategoryOptions = React.useMemo(() => {
+    const isReceita = (type ?? "").toLowerCase() === "receber";
+    const defaults = isReceita ? DEFAULT_INCOME_CATEGORIES : DEFAULT_EXPENSE_CATEGORIES;
+    const defaultSet = new Set(defaults);
+    const extras: string[] = [];
+
+    for (const cat of availableCategories) {
+      if (cat && !defaultSet.has(cat)) {
+        extras.push(cat);
+      }
+    }
+
+    if (category && !defaultSet.has(category) && !extras.includes(category)) {
+      extras.push(category);
+    }
+
+    return { defaults, extras: extras.sort() };
+  }, [type, availableCategories, category]);
+
+  // Opções de categorias para edição (filtradas pelo tipo selecionado + cadastradas)
+  const editCategoryOptions = React.useMemo(() => {
+    const isReceita = (editType ?? "").toLowerCase() === "receber";
+    const defaults = isReceita ? DEFAULT_INCOME_CATEGORIES : DEFAULT_EXPENSE_CATEGORIES;
+    const defaultSet = new Set(defaults);
+    const extras: string[] = [];
+
+    for (const cat of availableCategories) {
+      if (cat && !defaultSet.has(cat)) {
+        extras.push(cat);
+      }
+    }
+
+    if (editCategory && !defaultSet.has(editCategory) && !extras.includes(editCategory)) {
+      extras.push(editCategory);
+    }
+
+    return { defaults, extras: extras.sort() };
+  }, [editType, availableCategories, editCategory]);
 
   // KPIs calculados sobre o período ativo
   const kpis = React.useMemo(() => {
@@ -507,6 +588,7 @@ export default function Financeiro() {
       setOpen(false);
       setDescription("");
       setCategory("");
+      setIsCustomCategory(false);
       setAmount(0);
       setDueDate(todayStr);
       setPaymentDate(todayStr);
@@ -543,6 +625,7 @@ export default function Financeiro() {
       toast.success("Lançamento atualizado");
       setEditOpen(false);
       setEditing(null);
+      setIsEditCustomCategory(false);
       await qc.invalidateQueries({ queryKey: ["financial_records"] });
     },
     onError: (e: any) => toast.error(e?.message ?? "Erro ao atualizar lançamento"),
@@ -568,6 +651,7 @@ export default function Financeiro() {
     setEditType(r.type);
     setEditDescription(r.description);
     setEditCategory(r.category ?? "");
+    setIsEditCustomCategory(false);
     setEditAmount(Number(r.amount ?? 0));
     setEditDueDate(r.due_date);
     setEditPaymentDate(r.payment_date ? r.payment_date.slice(0, 10) : todayStr);
@@ -646,7 +730,10 @@ export default function Financeiro() {
               Exportar CSV
             </Button>
 
-            <Dialog open={open} onOpenChange={setOpen}>
+            <Dialog open={open} onOpenChange={(v) => {
+              setOpen(v);
+              if (!v) setIsCustomCategory(false);
+            }}>
               <DialogTrigger asChild>
                 <Button type="button" variant="hero" className="flex-1 gap-2 sm:flex-none">
                   <Plus className="h-4 w-4" />
@@ -661,7 +748,14 @@ export default function Financeiro() {
               <div className="grid gap-4 py-2">
                 <div className="grid gap-2">
                   <Label>Tipo de Lançamento</Label>
-                  <Select value={type} onValueChange={setType}>
+                  <Select
+                    value={type}
+                    onValueChange={(val) => {
+                      setType(val);
+                      setCategory("");
+                      setIsCustomCategory(false);
+                    }}
+                  >
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
@@ -682,12 +776,79 @@ export default function Financeiro() {
                 </div>
 
                 <div className="grid gap-2">
-                  <Label>Categoria</Label>
-                  <Input
-                    value={category}
-                    onChange={(e) => setCategory(e.target.value)}
-                    placeholder="Ex: Operacional, Vendas, Fornecedores…"
-                  />
+                  <div className="flex items-center justify-between">
+                    <Label>Categoria</Label>
+                    {isCustomCategory && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setIsCustomCategory(false);
+                          setCategory("");
+                        }}
+                        className="h-5 px-1.5 text-[11px] text-muted-foreground hover:text-foreground"
+                      >
+                        Voltar para lista
+                      </Button>
+                    )}
+                  </div>
+
+                  {!isCustomCategory ? (
+                    <Select
+                      value={category || "__none__"}
+                      onValueChange={(val) => {
+                        if (val === "__custom__") {
+                          setIsCustomCategory(true);
+                          setCategory("");
+                        } else if (val === "__none__") {
+                          setCategory("");
+                        } else {
+                          setCategory(val);
+                        }
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione uma categoria..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">Sem categoria</SelectItem>
+                        <SelectGroup>
+                          <SelectLabel>
+                            {(type ?? "").toLowerCase() === "receber"
+                              ? "Categorias de Receita"
+                              : "Categorias de Despesa"}
+                          </SelectLabel>
+                          {createCategoryOptions.defaults.map((cat) => (
+                            <SelectItem key={cat} value={cat}>
+                              {cat}
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                        {createCategoryOptions.extras.length > 0 && (
+                          <SelectGroup>
+                            <SelectLabel>Outras Categorias Cadastradas</SelectLabel>
+                            {createCategoryOptions.extras.map((cat) => (
+                              <SelectItem key={cat} value={cat}>
+                                {cat}
+                              </SelectItem>
+                            ))}
+                          </SelectGroup>
+                        )}
+                        <SelectSeparator />
+                        <SelectItem value="__custom__" className="text-primary font-medium">
+                          + Digitar nova categoria...
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <Input
+                      value={category}
+                      onChange={(e) => setCategory(e.target.value)}
+                      placeholder="Digite o nome da nova categoria…"
+                      autoFocus
+                    />
+                  )}
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
@@ -1653,7 +1814,10 @@ export default function Financeiro() {
         </Tabs>
 
         {/* DIÁLOGO DE EDIÇÃO */}
-        <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <Dialog open={editOpen} onOpenChange={(v) => {
+          setEditOpen(v);
+          if (!v) setIsEditCustomCategory(false);
+        }}>
           <DialogContent className="sm:max-w-lg">
             <DialogHeader>
               <DialogTitle>Editar Lançamento Financeiro</DialogTitle>
@@ -1662,7 +1826,14 @@ export default function Financeiro() {
               <div className="grid gap-4 py-2">
                 <div className="grid gap-2">
                   <Label>Tipo</Label>
-                  <Select value={editType} onValueChange={setEditType}>
+                  <Select
+                    value={editType}
+                    onValueChange={(val) => {
+                      setEditType(val);
+                      setEditCategory("");
+                      setIsEditCustomCategory(false);
+                    }}
+                  >
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
@@ -1682,12 +1853,79 @@ export default function Financeiro() {
                 </div>
 
                 <div className="grid gap-2">
-                  <Label>Categoria</Label>
-                  <Input
-                    value={editCategory}
-                    onChange={(e) => setEditCategory(e.target.value)}
-                    placeholder="Opcional"
-                  />
+                  <div className="flex items-center justify-between">
+                    <Label>Categoria</Label>
+                    {isEditCustomCategory && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setIsEditCustomCategory(false);
+                          setEditCategory("");
+                        }}
+                        className="h-5 px-1.5 text-[11px] text-muted-foreground hover:text-foreground"
+                      >
+                        Voltar para lista
+                      </Button>
+                    )}
+                  </div>
+
+                  {!isEditCustomCategory ? (
+                    <Select
+                      value={editCategory || "__none__"}
+                      onValueChange={(val) => {
+                        if (val === "__custom__") {
+                          setIsEditCustomCategory(true);
+                          setEditCategory("");
+                        } else if (val === "__none__") {
+                          setEditCategory("");
+                        } else {
+                          setEditCategory(val);
+                        }
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione uma categoria..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">Sem categoria</SelectItem>
+                        <SelectGroup>
+                          <SelectLabel>
+                            {(editType ?? "").toLowerCase() === "receber"
+                              ? "Categorias de Receita"
+                              : "Categorias de Despesa"}
+                          </SelectLabel>
+                          {editCategoryOptions.defaults.map((cat) => (
+                            <SelectItem key={cat} value={cat}>
+                              {cat}
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                        {editCategoryOptions.extras.length > 0 && (
+                          <SelectGroup>
+                            <SelectLabel>Outras Categorias Cadastradas</SelectLabel>
+                            {editCategoryOptions.extras.map((cat) => (
+                              <SelectItem key={cat} value={cat}>
+                                {cat}
+                              </SelectItem>
+                            ))}
+                          </SelectGroup>
+                        )}
+                        <SelectSeparator />
+                        <SelectItem value="__custom__" className="text-primary font-medium">
+                          + Digitar nova categoria...
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <Input
+                      value={editCategory}
+                      onChange={(e) => setEditCategory(e.target.value)}
+                      placeholder="Digite o nome da categoria…"
+                      autoFocus
+                    />
+                  )}
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">

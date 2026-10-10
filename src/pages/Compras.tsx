@@ -264,6 +264,33 @@ export default function Compras() {
           orgId: currentOrg?.id,
         });
       }
+
+      // Se já nasce como Recebido, credita estoque e histórico de preços imediatamente
+      if (status === "Recebido") {
+        for (const it of validItems) {
+          const { error: mvErr } = await (supabase as any).rpc("apply_movement", {
+            p_product_id: it.product_id,
+            p_type: "Entrada",
+            p_quantity: Number(it.quantity),
+            p_reason: "Compra (Recebimento)",
+            p_reference_id: poId,
+          });
+          if (mvErr) throw mvErr;
+
+          if (Number(it.unit_cost ?? 0) > 0) {
+            await insertPriceHistory({
+              product_id: it.product_id,
+              purchase_date: orderDate,
+              unit_price: Number(it.unit_cost),
+              supplier_id: supplierId || null,
+              supplier_name: (suppliers ?? []).find((s) => s.id === supplierId)?.name ?? null,
+              notes: "Pedido criado diretamente como Recebido",
+              source: "compra",
+              organization_id: currentOrg?.id,
+            });
+          }
+        }
+      }
     },
     onSuccess: async () => {
       toast.success("Pedido criado");
@@ -272,6 +299,8 @@ export default function Compras() {
       setStatus("Em Cotação");
       setItems([{ product_id: "", quantity: 1, unit_cost: 0 }]);
       await qc.invalidateQueries({ queryKey: ["purchase_orders"] });
+      await qc.invalidateQueries({ queryKey: ["products"] });
+      await qc.invalidateQueries({ queryKey: ["product_price_history"] });
       await qc.invalidateQueries({ queryKey: ["financial_records"] });
     },
     onError: (e: any) => toast.error(e?.message ?? "Erro ao criar pedido"),
@@ -473,6 +502,47 @@ export default function Compras() {
         }
       }
 
+      // Transição de status para Recebido (primeira entrada em estoque para pedido anteriormente não-recebido)
+      if (origStatus !== "Recebido" && editStatus === "Recebido") {
+        for (const it of validItems) {
+          const { error: mvErr } = await (supabase as any).rpc("apply_movement", {
+            p_product_id: it.product_id,
+            p_type: "Entrada",
+            p_quantity: Number(it.quantity),
+            p_reason: "Compra (Recebimento)",
+            p_reference_id: editing.id,
+          });
+          if (mvErr) throw mvErr;
+
+          if (Number(it.unit_cost ?? 0) > 0) {
+            await insertPriceHistory({
+              product_id: it.product_id,
+              purchase_date: editOrderDate || new Date().toISOString().slice(0, 10),
+              unit_price: Number(it.unit_cost),
+              supplier_id: editSupplierId || null,
+              supplier_name: (suppliers ?? []).find((s) => s.id === editSupplierId)?.name ?? editing.suppliers?.name ?? null,
+              notes: `Pedido #${editing.code || editing.id.slice(0, 6)} recebido via edição`,
+              source: "compra",
+              organization_id: currentOrg?.id,
+            });
+          }
+        }
+      }
+
+      // Estorno de recebimento: se estava Recebido e mudou para status pendente (não cancelado)
+      if (origStatus === "Recebido" && editStatus !== "Recebido" && editStatus !== "Cancelado") {
+        for (const it of origItems) {
+          const { error: mvErr } = await (supabase as any).rpc("apply_movement", {
+            p_product_id: it.product_id,
+            p_type: "Saída",
+            p_quantity: Number(it.quantity),
+            p_reason: "Compra (Estorno de Recebimento)",
+            p_reference_id: editing.id,
+          });
+          if (mvErr) throw mvErr;
+        }
+      }
+
       // Update cabeçalho
       const { error: upErr } = await supabase
         .from("purchase_orders")
@@ -524,6 +594,7 @@ export default function Compras() {
       setEditing(null);
       await qc.invalidateQueries({ queryKey: ["purchase_orders"] });
       await qc.invalidateQueries({ queryKey: ["products"] });
+      await qc.invalidateQueries({ queryKey: ["product_price_history"] });
       await qc.invalidateQueries({ queryKey: ["financial_records"] });
     },
     onError: (e: any) => {
