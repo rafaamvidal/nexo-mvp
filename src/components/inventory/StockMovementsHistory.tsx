@@ -15,6 +15,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { supabase } from "@/integrations/supabase/client";
 import { exportToCsv } from "@/lib/exportCsv";
 import { useOrganization } from "@/contexts/OrganizationContext";
+import { calculateBoxBreakdown, parsePackageMetadata } from "@/lib/packageConversion";
 
 export type StockMovementRow = {
   id: string;
@@ -29,6 +30,7 @@ export type StockMovementRow = {
     unit: string | null;
     sku: string | null;
     category: string | null;
+    description?: string | null;
   } | null;
 };
 
@@ -45,7 +47,8 @@ async function fetchStockMovements(orgId?: string): Promise<StockMovementRow[]> 
       name,
       unit,
       sku,
-      category
+      category,
+      description
     )
   `;
 
@@ -263,6 +266,14 @@ export function StockMovementsHistory() {
                       m.type.toLowerCase().includes("in") ||
                       m.type.toLowerCase().includes("purchase");
 
+                    const unit = m.products?.unit ?? "un";
+                    const pkg = parsePackageMetadata(
+                      m.products?.description,
+                      m.products?.name,
+                      unit
+                    );
+                    const boxInfo = calculateBoxBreakdown(Math.abs(Number(m.quantity) || 0), unit, pkg);
+
                     return (
                       <TableRow key={m.id} className="odd:bg-muted/15">
                         <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
@@ -279,15 +290,22 @@ export function StockMovementsHistory() {
                           )}
                         </TableCell>
                         <TableCell>{renderTypeBadge(m.type)}</TableCell>
-                        <TableCell className="text-right font-semibold">
-                          <span className={isPositive ? "text-emerald-600" : "text-rose-600"}>
-                            {isPositive ? `+${m.quantity}` : `-${m.quantity}`}
-                          </span>{" "}
-                          <span className="text-xs font-normal text-muted-foreground">
-                            {m.products?.unit ?? "un"}
-                          </span>
+                        <TableCell className="text-right font-semibold whitespace-nowrap">
+                          <div>
+                            <span className={isPositive ? "text-emerald-600" : "text-rose-600"}>
+                              {isPositive ? `+${m.quantity}` : `-${m.quantity}`}
+                            </span>{" "}
+                            <span className="text-xs font-normal text-muted-foreground">
+                              {unit}
+                            </span>
+                          </div>
+                          {boxInfo.hasBoxes && (
+                            <span className="text-[11px] font-medium text-muted-foreground block">
+                              📦 {boxInfo.summaryText}
+                            </span>
+                          )}
                         </TableCell>
-                        <TableCell className="text-xs text-muted-foreground max-w-xs truncate">
+                        <TableCell className="text-xs text-muted-foreground max-w-xs truncate" title={m.reason ?? ""}>
                           {m.reason ?? "Sem motivo informado"}
                         </TableCell>
                       </TableRow>

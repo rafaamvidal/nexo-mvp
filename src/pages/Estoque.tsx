@@ -31,6 +31,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { useOrganization } from "@/contexts/OrganizationContext";
 import { formatBRL } from "@/lib/masks";
 import { resolveProductClassification } from "@/lib/productClassification";
+import { calculateBoxBreakdown, parsePackageMetadata } from "@/lib/packageConversion";
 
 type ProductLite = {
   id: string;
@@ -177,6 +178,9 @@ export default function Estoque() {
                   const isFinished = resolved.type === "Produto Final";
                   const minVal = Number(p.min_stock ?? 0);
                   const low = !isFinished && minVal > 0 && Number(p.current_stock) < minVal;
+                  const pkg = parsePackageMetadata(p.description, p.name, p.unit);
+                  const boxInfo = calculateBoxBreakdown(Number(p.current_stock ?? 0), p.unit, pkg);
+
                   return (
                     // min-w-0 impede que o nome (nowrap) alargue o card além da tela no mobile
                     <Card key={p.id} className="glass min-w-0 border-border/60 transition-shadow hover:shadow-sm">
@@ -189,24 +193,39 @@ export default function Estoque() {
                             size="icon"
                             className="h-9 w-9 shrink-0 sm:h-8 sm:w-8"
                             aria-label="Editar estoque"
-                            title="Editar estoque"
+                            title="Editar estoque (Unidades ou Caixas)"
                             onClick={() => setEditProduct(p)}
                           >
                             <Pencil className="h-4 w-4 sm:h-3.5 sm:w-3.5" />
                           </Button>
                         </CardTitle>
                         <div className="flex flex-wrap items-center gap-2">
-                          <span className={"text-sm font-bold " + (low ? "text-destructive" : "")}>
-                            {p.current_stock}
-                          </span>
-                          <span className="text-xs text-muted-foreground">{p.unit}</span>
+                          <div className="inline-flex items-baseline gap-1">
+                            <span className={"text-base font-extrabold " + (low ? "text-destructive" : "")}>
+                              {p.current_stock}
+                            </span>
+                            <span className="text-xs text-muted-foreground">{p.unit}</span>
+                          </div>
+                          {boxInfo.hasBoxes && (
+                            <span
+                              className="inline-flex items-center gap-1 rounded-md bg-primary/10 border border-primary/25 px-2 py-0.5 text-xs font-bold text-primary"
+                              title={boxInfo.secondaryText}
+                            >
+                              📦 {boxInfo.summaryText}
+                            </span>
+                          )}
                           {low && <Badge variant="destructive">Estoque Baixo</Badge>}
                         </div>
                       </CardHeader>
                       <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4 pt-0 sm:p-6 sm:pt-0">
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-xs text-muted-foreground">{p.category ?? "Sem categoria"}</p>
-                          {isFinished ? (
+                          {boxInfo.hasBoxes ? (
+                            <p className="mt-1 text-[11px] text-muted-foreground font-medium">
+                              {boxInfo.packageName} c/ {boxInfo.packageSize} {p.unit}
+                              {!isFinished && minVal > 0 ? ` • Mín: ${p.min_stock}` : ""}
+                            </p>
+                          ) : isFinished ? (
                             <p className="mt-1 text-xs text-muted-foreground font-medium">Fabricação própria</p>
                           ) : minVal > 0 ? (
                             <p className="mt-1 text-xs text-muted-foreground">Mínimo: {p.min_stock}</p>
@@ -214,7 +233,7 @@ export default function Estoque() {
                             <p className="mt-1 text-xs text-muted-foreground">Sem mínimo</p>
                           )}
                         </div>
-                        <div className="shrink-0 flex items-center gap-1.5">
+                        <div className="shrink-0 flex flex-wrap items-center justify-end gap-1.5">
                           {isFinished && (
                             <ProduceBatchDialog
                               product={{
@@ -223,6 +242,7 @@ export default function Estoque() {
                                 unit: p.unit,
                                 current_stock: Number(p.current_stock ?? 0),
                                 price_cost: p.price_cost,
+                                description: p.description,
                               }}
                               trigger={
                                 <Button
@@ -230,7 +250,7 @@ export default function Estoque() {
                                   size="sm"
                                   variant="outline"
                                   className="h-8 text-xs gap-1 border-primary/40 text-primary hover:bg-primary/10 px-2 font-medium"
-                                  title="Apontar Fabricação / Novo Lote"
+                                  title="Apontar Fabricação / Novo Lote (em Caixas ou Unidades)"
                                 >
                                   <Factory className="h-3.5 w-3.5" />
                                   <span>Produzir</span>
@@ -238,7 +258,13 @@ export default function Estoque() {
                               }
                             />
                           )}
-                          <StockQuickAdjust productId={p.id} step={1} />
+                          <StockQuickAdjust
+                            productId={p.id}
+                            step={1}
+                            unit={p.unit}
+                            packageSize={boxInfo.hasBoxes ? boxInfo.packageSize : undefined}
+                            packageShort={boxInfo.packageShort}
+                          />
                         </div>
                       </CardContent>
                     </Card>

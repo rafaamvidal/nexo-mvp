@@ -32,7 +32,7 @@ import {
 import { toast } from "sonner";
 import { Switch } from "@/components/ui/switch";
 import { isForeignKeyViolation, toastProductDeleteBlocked } from "@/lib/supabaseErrors";
-import { parsePackageMetadata, formatPackageSummary } from "@/lib/packageConversion";
+import { calculateBoxBreakdown, parsePackageMetadata, formatPackageSummary } from "@/lib/packageConversion";
 
 type Filter = "Todos" | ProductType;
 
@@ -350,7 +350,8 @@ export default function Produtos() {
                   const min = Number(p.min_stock ?? 0);
                   const low = p.type !== "Produto Final" && min > 0 && Number(p.current_stock) < min;
                   const inactive = (p.status ?? "Ativo") === "Inativo";
-                  const pkg = parsePackageMetadata(p.description);
+                  const pkg = parsePackageMetadata(p.description, p.name, p.unit);
+                  const boxInfo = calculateBoxBreakdown(Number(p.current_stock ?? 0), p.unit, pkg);
 
                   return (
                     <div
@@ -441,11 +442,21 @@ export default function Produtos() {
                       <div className="grid grid-cols-2 gap-2 rounded-lg bg-muted/30 p-2 text-xs border border-border/40">
                         <div>
                           <span className="text-[11px] text-muted-foreground block">Estoque Atual</span>
-                          <span className={"font-bold text-sm " + (low ? "text-destructive" : "text-foreground")}>
-                            {p.current_stock} <span className="font-normal text-xs text-muted-foreground">{p.unit}</span>
-                          </span>
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span className={"font-bold text-sm " + (low ? "text-destructive" : "text-foreground")}>
+                              {p.current_stock} <span className="font-normal text-xs text-muted-foreground">{p.unit}</span>
+                            </span>
+                            {boxInfo.hasBoxes && (
+                              <span
+                                className="inline-flex items-center rounded bg-primary/10 border border-primary/25 px-1.5 py-0.5 text-[11px] font-bold text-primary"
+                                title={boxInfo.secondaryText}
+                              >
+                                📦 {boxInfo.summaryText}
+                              </span>
+                            )}
+                          </div>
                           {Number(p.current_stock) > 0 && Number(p.price_cost ?? 0) > 0 && (
-                            <span className="text-[10px] text-muted-foreground block">
+                            <span className="text-[10px] text-muted-foreground block mt-0.5">
                               Total: {formatBRL(Number(p.current_stock) * Number(p.price_cost))}
                             </span>
                           )}
@@ -466,12 +477,12 @@ export default function Produtos() {
                       {/* Informações adicionais de embalagem se houver */}
                       {pkg && (
                         <div className="text-[11px] text-muted-foreground">
-                          Embalagem: {pkg.packageName} ({pkg.packageSize} {p.unit})
+                          Embalagem: {pkg.packageName} c/ {pkg.packageSize} {p.unit}
                         </div>
                       )}
 
                       {/* Barra de ações operacionais e ferramentas */}
-                      <div className="flex items-center justify-between border-t border-border/40 pt-2 text-xs">
+                      <div className="flex flex-wrap items-center justify-between gap-1.5 border-t border-border/40 pt-2 text-xs">
                         <div className="flex items-center gap-1">
                           {p.type === "Produto Final" && (
                             <>
@@ -483,6 +494,7 @@ export default function Produtos() {
                                   current_stock: Number(p.current_stock ?? 0),
                                   price_cost: p.price_cost,
                                   price_sale: p.price_sale,
+                                  description: p.description,
                                 }}
                                 trigger={
                                   <Button
@@ -533,7 +545,12 @@ export default function Produtos() {
                               </Button>
                             }
                           />
-                          <StockQuickAdjust productId={p.id} />
+                          <StockQuickAdjust
+                            productId={p.id}
+                            unit={p.unit}
+                            packageSize={boxInfo.hasBoxes ? boxInfo.packageSize : undefined}
+                            packageShort={boxInfo.packageShort}
+                          />
                         </div>
                       </div>
                     </div>
@@ -560,7 +577,8 @@ export default function Produtos() {
                       const min = Number(p.min_stock ?? 0);
                       const low = p.type !== "Produto Final" && min > 0 && Number(p.current_stock) < min;
                       const inactive = (p.status ?? "Ativo") === "Inativo";
-                      const pkg = parsePackageMetadata(p.description);
+                      const pkg = parsePackageMetadata(p.description, p.name, p.unit);
+                      const boxInfo = calculateBoxBreakdown(Number(p.current_stock ?? 0), p.unit, pkg);
                       return (
                         <TableRow key={p.id} className="odd:bg-muted/20">
                           <TableCell className="py-2.5 px-3 font-semibold">
@@ -577,12 +595,22 @@ export default function Produtos() {
                             {getTypeBadge(p.type)}
                           </TableCell>
                           <TableCell className={"py-2.5 px-3 text-right font-bold whitespace-nowrap " + (low ? "text-destructive" : "")}>
-                            <div>
-                              {p.current_stock}
-                              <span className="ml-1 text-xs font-normal text-muted-foreground">{p.unit}</span>
+                            <div className="flex flex-col items-end gap-0.5">
+                              <div>
+                                {p.current_stock}
+                                <span className="ml-1 text-xs font-normal text-muted-foreground">{p.unit}</span>
+                              </div>
+                              {boxInfo.hasBoxes && (
+                                <span
+                                  className="inline-flex items-center rounded bg-primary/10 border border-primary/25 px-1.5 py-0.5 text-[11px] font-bold text-primary"
+                                  title={boxInfo.secondaryText}
+                                >
+                                  📦 {boxInfo.summaryText}
+                                </span>
+                              )}
                             </div>
                             {Number(p.current_stock) > 0 && Number(p.price_cost ?? 0) > 0 && (
-                              <span className="text-[11px] font-normal text-muted-foreground block">
+                              <span className="text-[11px] font-normal text-muted-foreground block mt-0.5">
                                 Total: {formatBRL(Number(p.current_stock) * Number(p.price_cost))}
                               </span>
                             )}
@@ -597,7 +625,7 @@ export default function Produtos() {
                                 className="text-[11px] text-muted-foreground block truncate max-w-[120px] ml-auto"
                                 title={formatPackageSummary(pkg, p.unit)}
                               >
-                                {pkg.packageName} {pkg.packageSize}{p.unit}
+                                {pkg.packageName} c/ {pkg.packageSize} {p.unit}
                               </span>
                             )}
                           </TableCell>
@@ -616,13 +644,14 @@ export default function Produtos() {
                                       current_stock: Number(p.current_stock ?? 0),
                                       price_cost: p.price_cost,
                                       price_sale: p.price_sale,
+                                      description: p.description,
                                     }}
                                     trigger={
                                       <Button
                                         type="button"
                                         variant="outline"
                                         size="sm"
-                                        title="Apontar Fabricação / Novo Lote"
+                                        title="Apontar Fabricação / Novo Lote (Caixas ou Unidades)"
                                         className="h-8 w-8 p-0 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 border-emerald-500/40"
                                       >
                                         <Factory className="h-4 w-4" />
@@ -732,7 +761,12 @@ export default function Produtos() {
                                   </AlertDialogFooter>
                                 </AlertDialogContent>
                               </AlertDialog>
-                              <StockQuickAdjust productId={p.id} />
+                              <StockQuickAdjust
+                                productId={p.id}
+                                unit={p.unit}
+                                packageSize={boxInfo.hasBoxes ? boxInfo.packageSize : undefined}
+                                packageShort={boxInfo.packageShort}
+                              />
                             </div>
                           </TableCell>
                         </TableRow>

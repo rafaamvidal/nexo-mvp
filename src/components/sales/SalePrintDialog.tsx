@@ -9,6 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { supabase } from "@/integrations/supabase/client";
 import { formatBRL, getWhatsAppUrl, maskCpfCnpj, maskPhone } from "@/lib/masks";
+import { calculateBoxBreakdown, parsePackageMetadata } from "@/lib/packageConversion";
 import { toast } from "sonner";
 
 interface SalePrintDialogProps {
@@ -57,7 +58,8 @@ export function SalePrintDialog({ open, onOpenChange, saleId }: SalePrintDialogP
           products (
             name,
             unit,
-            sku
+            sku,
+            description
           )
         `)
         .eq("sale_id", saleId);
@@ -80,10 +82,12 @@ export function SalePrintDialog({ open, onOpenChange, saleId }: SalePrintDialogP
     const clientName = (data.clients as any)?.name ?? "Cliente";
     const dateFormatted = format(new Date(data.created_at), "dd/MM/yyyy HH:mm");
     const itemsText = (data.items as any[])
-      .map(
-        (it) =>
-          `• ${it.quantity}x ${it.products?.name ?? "Item"} - ${formatBRL(it.unit_price)} = ${formatBRL(it.total)}`
-      )
+      .map((it) => {
+        const pkg = parsePackageMetadata(it.products?.description, it.products?.name, it.products?.unit);
+        const boxInfo = calculateBoxBreakdown(Number(it.quantity ?? 0), it.products?.unit, pkg);
+        const boxSuffix = boxInfo.hasBoxes ? ` (${boxInfo.summaryText})` : "";
+        return `• ${it.quantity}x${boxSuffix} ${it.products?.name ?? "Item"} - ${formatBRL(it.unit_price)} = ${formatBRL(it.total)}`;
+      })
       .join("\n");
 
     const text = `*PEDIDO / COMPROVANTE AGILIX*\n` +
@@ -194,29 +198,40 @@ export function SalePrintDialog({ open, onOpenChange, saleId }: SalePrintDialogP
                 <TableHeader>
                   <TableRow className="text-xs">
                     <TableHead>Item / Produto</TableHead>
-                    <TableHead className="text-center w-20">Qtd</TableHead>
+                    <TableHead className="text-center w-28">Qtd</TableHead>
                     <TableHead className="text-right w-28">Preço Un.</TableHead>
                     <TableHead className="text-right w-28">Subtotal</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody className="text-xs">
-                  {(data.items as any[]).map((it, idx) => (
-                    <TableRow key={it.id ?? idx}>
-                      <TableCell>
-                        <span className="font-medium">{it.products?.name ?? "Produto"}</span>
-                        {it.products?.sku && (
-                          <span className="ml-1 text-[11px] text-muted-foreground font-mono">
-                            ({it.products.sku})
-                          </span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-center font-medium">
-                        {it.quantity} {it.products?.unit ?? ""}
-                      </TableCell>
-                      <TableCell className="text-right">{formatBRL(it.unit_price)}</TableCell>
-                      <TableCell className="text-right font-semibold">{formatBRL(it.total)}</TableCell>
-                    </TableRow>
-                  ))}
+                  {(data.items as any[]).map((it, idx) => {
+                    const pkg = parsePackageMetadata(it.products?.description, it.products?.name, it.products?.unit);
+                    const boxInfo = calculateBoxBreakdown(Number(it.quantity ?? 0), it.products?.unit, pkg);
+                    return (
+                      <TableRow key={it.id ?? idx}>
+                        <TableCell>
+                          <span className="font-medium">{it.products?.name ?? "Produto"}</span>
+                          {it.products?.sku && (
+                            <span className="ml-1 text-[11px] text-muted-foreground font-mono">
+                              ({it.products.sku})
+                            </span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-center font-medium">
+                          <div>
+                            {it.quantity} {it.products?.unit ?? ""}
+                          </div>
+                          {boxInfo.hasBoxes && (
+                            <div className="text-[10px] text-muted-foreground">
+                              ({boxInfo.summaryText})
+                            </div>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right">{formatBRL(it.unit_price)}</TableCell>
+                        <TableCell className="text-right font-semibold">{formatBRL(it.total)}</TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>

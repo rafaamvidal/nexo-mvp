@@ -35,6 +35,7 @@ import {
   COMMON_PACKAGE_TYPES,
   calculateUnitCost,
   calculateStockTotal,
+  calculateBoxBreakdown,
   parsePackageMetadata,
   encodePackageMetadata,
   hasSuspectedUnitCostAnomaly,
@@ -285,8 +286,8 @@ export function ProductFormSheet({
     setPurchaseNotes("");
     if (!product) {
       setShowPackagingCalc(false);
-      setPkgName("Saco");
-      setPkgSize("");
+      setPkgName("Caixa");
+      setPkgSize("200");
       setPkgPrice("");
       form.reset({
         name: "",
@@ -306,16 +307,20 @@ export function ProductFormSheet({
       category: product.category,
     });
 
-    const parsedPkg = parsePackageMetadata(product.description);
+    const parsedPkg = parsePackageMetadata(product.description, product.name, product.unit);
     if (parsedPkg) {
       setShowPackagingCalc(true);
       setPkgName(parsedPkg.packageName);
       setPkgSize(String(parsedPkg.packageSize));
-      setPkgPrice(parsedPkg.packagePrice.toLocaleString("pt-BR", { minimumFractionDigits: 2 }));
+      setPkgPrice(
+        parsedPkg.packagePrice > 0
+          ? parsedPkg.packagePrice.toLocaleString("pt-BR", { minimumFractionDigits: 2 })
+          : ""
+      );
     } else {
       setShowPackagingCalc(false);
-      setPkgName("Saco");
-      setPkgSize("");
+      setPkgName(resolved.type === "Produto Final" ? "Caixa" : "Saco");
+      setPkgSize(resolved.type === "Produto Final" ? "200" : "");
       setPkgPrice("");
     }
 
@@ -333,13 +338,19 @@ export function ProductFormSheet({
 
   const reactivateMutation = useMutation({
     mutationFn: async ({ id, values }: { id: string; values: FormValues }) => {
-      const pkgInfo: PackageInfo | null =
-        showPackagingCalc && numPkgSize > 0 && numPkgPrice > 0
-          ? { packageName: pkgName || "Saco", packageSize: numPkgSize, packagePrice: numPkgPrice }
-          : null;
-      const finalDescription = encodePackageMetadata(pkgInfo, product?.description);
-
       const isFinished = values.type === "Produto Final";
+      const pkgInfo: PackageInfo | null =
+        showPackagingCalc && numPkgSize > 0
+          ? {
+              packageName: pkgName || (isFinished ? "Caixa" : "Saco"),
+              packageSize: numPkgSize,
+              packagePrice: isFinished ? 0 : numPkgPrice,
+            }
+          : null;
+      const finalDescription = encodePackageMetadata(pkgInfo, product?.description, {
+        markExplicitNone: !showPackagingCalc && Boolean(product),
+      });
+
       const payload: any = {
         status: "Ativo",
         name: normalizeName(values.name),
@@ -411,13 +422,18 @@ export function ProductFormSheet({
         }
       }
 
-      const pkgInfo: PackageInfo | null =
-        showPackagingCalc && numPkgSize > 0 && numPkgPrice > 0
-          ? { packageName: pkgName || "Saco", packageSize: numPkgSize, packagePrice: numPkgPrice }
-          : null;
-      const finalDescription = encodePackageMetadata(pkgInfo, product?.description);
-
       const isFinished = values.type === "Produto Final";
+      const pkgInfo: PackageInfo | null =
+        showPackagingCalc && numPkgSize > 0
+          ? {
+              packageName: pkgName || (isFinished ? "Caixa" : "Saco"),
+              packageSize: numPkgSize,
+              packagePrice: isFinished ? 0 : numPkgPrice,
+            }
+          : null;
+      const finalDescription = encodePackageMetadata(pkgInfo, product?.description, {
+        markExplicitNone: !showPackagingCalc && Boolean(product),
+      });
       const payload: any = {
         name: normalizeName(values.name),
         type: values.type,
@@ -791,13 +807,13 @@ export function ProductFormSheet({
             </div>
           )}
 
-          {/* CARD DE CUSTOS & HISTÓRICO */}
+          {/* CARD DE CUSTOS, EMBALAGEM / CAIXAS & HISTÓRICO */}
           <div className="rounded-lg border border-border/80 bg-muted/20 p-3.5 space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-1.5">
                 <Package className="h-4 w-4 text-primary shrink-0" />
                 <span className="text-xs font-semibold uppercase tracking-wider text-foreground">
-                  {isFinishedProduct ? "Custo de Produção & Venda" : "Custo & Embalagem de Compra"}
+                  {isFinishedProduct ? "Custo, Venda & Controle por Caixa" : "Custo & Embalagem de Compra / Caixa"}
                 </span>
               </div>
               <div className="flex flex-wrap items-center gap-2">
@@ -824,35 +840,52 @@ export function ProductFormSheet({
                     }
                   />
                 )}
-                {!isFinishedProduct && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="h-auto min-h-7 py-1 px-2.5 text-xs gap-1 border-primary/30 text-primary hover:bg-primary/10 whitespace-normal text-left"
-                    onClick={() => setShowPackagingCalc(!showPackagingCalc)}
-                  >
-                    <Calculator className="h-3.5 w-3.5 shrink-0" />
-                    <span>{showPackagingCalc ? "Informar Custo Direto" : "📦 Calcular por Embalagem Fechada"}</span>
-                  </Button>
-                )}
+                <Button
+                  type="button"
+                  variant={showPackagingCalc ? "secondary" : "outline"}
+                  size="sm"
+                  className="h-auto min-h-7 py-1 px-2.5 text-xs gap-1 border-primary/30 text-primary hover:bg-primary/10 whitespace-normal text-left"
+                  onClick={() => {
+                    const next = !showPackagingCalc;
+                    setShowPackagingCalc(next);
+                    if (next && !pkgSize && isFinishedProduct) {
+                      setPkgName("Caixa");
+                      setPkgSize("200");
+                    }
+                  }}
+                >
+                  <Box className="h-3.5 w-3.5 shrink-0" />
+                  <span>
+                    {showPackagingCalc
+                      ? isFinishedProduct
+                        ? "Desativar Controle por Caixa"
+                        : "Ocultar Embalagem / Caixa"
+                      : isFinishedProduct
+                        ? "📦 Controlar por Caixa (ex: 200 un)"
+                        : "📦 Configurar Caixa / Embalagem Fechada"}
+                  </span>
+                </Button>
               </div>
             </div>
 
-            {/* CALCULADORA DE EMBALAGEM FECHADA */}
+            {/* CONFIGURAÇÃO DE CAIXA / EMBALAGEM FECHADA */}
             {showPackagingCalc && (
               <div className="rounded-md border border-primary/20 bg-background/80 p-3 space-y-3">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-1">
                   <span className="text-xs font-semibold text-foreground">
-                    Dados da Embalagem do Fornecedor (Saco, Caixa, Balde)
+                    {isFinishedProduct
+                      ? "Capacidade da Caixa de Armazenamento (ex: Trufas em Caixas de 200 un)"
+                      : "Dados da Embalagem / Caixa (Saco, Caixa, Balde)"}
                   </span>
                   <span className="text-[11px] text-muted-foreground">
-                    Calcula custo por {currentUnit} automaticamente
+                    {isFinishedProduct
+                      ? `Converte o estoque em ${pkgName.toLowerCase()}s + ${currentUnit} automaticamente`
+                      : `Controla por ${pkgName.toLowerCase()} e calcula custo por ${currentUnit}`}
                   </span>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
-                  <div className="sm:col-span-5 grid gap-1">
+                  <div className={isFinishedProduct ? "sm:col-span-5 grid gap-1" : "sm:col-span-5 grid gap-1"}>
                     <Label className="text-xs">Tipo de Embalagem</Label>
                     <Select value={pkgName} onValueChange={setPkgName}>
                       <SelectTrigger className="h-8 text-xs">
@@ -868,56 +901,93 @@ export function ProductFormSheet({
                     </Select>
                   </div>
 
-                  <div className="sm:col-span-3 grid gap-1">
-                    <Label className="text-xs">Conteúdo ({currentUnit})</Label>
-                    <Input
-                      value={pkgSize}
-                      onChange={(e) => handlePkgSizeChange(e.target.value)}
-                      placeholder="Ex: 25"
-                      className="h-8 text-xs font-medium"
-                      inputMode="decimal"
-                    />
+                  <div className={isFinishedProduct ? "sm:col-span-7 grid gap-1" : "sm:col-span-3 grid gap-1"}>
+                    <Label className="text-xs">
+                      Quantidade por {pkgName} ({currentUnit}) *
+                    </Label>
+                    <div className="flex items-center gap-1.5">
+                      <Input
+                        value={pkgSize}
+                        onChange={(e) => handlePkgSizeChange(e.target.value)}
+                        placeholder={isFinishedProduct ? "Ex: 200" : "Ex: 25"}
+                        className="h-8 text-xs font-bold"
+                        inputMode="decimal"
+                      />
+                      {isFinishedProduct && (
+                        <div className="flex items-center gap-1 shrink-0">
+                          {["200", "100", "50"].map((preset) => (
+                            <Button
+                              key={preset}
+                              type="button"
+                              size="sm"
+                              variant={pkgSize === preset ? "default" : "outline"}
+                              className="h-8 px-2 text-[11px] font-semibold"
+                              onClick={() => handlePkgSizeChange(preset)}
+                            >
+                              {preset}
+                            </Button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
 
-                  <div className="sm:col-span-4 grid gap-1">
-                    <Label className="text-xs">Preço Pago (R$)</Label>
-                    <Input
-                      value={pkgPrice}
-                      onChange={(e) => handlePkgPriceChange(e.target.value)}
-                      placeholder="Ex: 512,64"
-                      className="h-8 text-xs font-medium"
-                      inputMode="decimal"
-                    />
-                  </div>
+                  {!isFinishedProduct && (
+                    <div className="sm:col-span-4 grid gap-1">
+                      <Label className="text-xs">Preço Pago na Embalagem (R$)</Label>
+                      <Input
+                        value={pkgPrice}
+                        onChange={(e) => handlePkgPriceChange(e.target.value)}
+                        placeholder="Ex: 512,64 (Opcional)"
+                        className="h-8 text-xs font-medium"
+                        inputMode="decimal"
+                      />
+                    </div>
+                  )}
                 </div>
 
-                {calcUnitCost > 0 && (
+                {numPkgSize > 1 && (
                   <div className="rounded-md bg-primary/10 border border-primary/20 p-2.5 text-xs space-y-1">
                     <div className="flex flex-wrap justify-between items-center gap-1">
-                      <span className="text-muted-foreground font-medium">Custo Unitário Calculado:</span>
-                      <span className="font-extrabold text-primary text-sm">
-                        {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(
-                          calcUnitCost
-                        )}{" "}
-                        / {currentUnit}
+                      <span className="text-muted-foreground font-medium">Padrão configurado:</span>
+                      <span className="font-bold text-primary">
+                        1 {pkgName} = {numPkgSize} {currentUnit}
                       </span>
                     </div>
-                    <div className="flex flex-wrap justify-between items-center gap-1 text-[11px] text-muted-foreground">
-                      <span>Memória de cálculo:</span>
-                      <span>
-                        {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(
-                          numPkgPrice
-                        )}{" "}
-                        ÷ {numPkgSize} {currentUnit}
-                      </span>
-                    </div>
+                    {!isFinishedProduct && calcUnitCost > 0 && (
+                      <>
+                        <div className="flex flex-wrap justify-between items-center gap-1">
+                          <span className="text-muted-foreground font-medium">Custo Unitário Calculado:</span>
+                          <span className="font-extrabold text-primary text-sm">
+                            {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(
+                              calcUnitCost
+                            )}{" "}
+                            / {currentUnit}
+                          </span>
+                        </div>
+                        <div className="flex flex-wrap justify-between items-center gap-1 text-[11px] text-muted-foreground">
+                          <span>Memória de cálculo:</span>
+                          <span>
+                            {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(
+                              numPkgPrice
+                            )}{" "}
+                            ÷ {numPkgSize} {currentUnit}
+                          </span>
+                        </div>
+                      </>
+                    )}
                     {numCurrentStock > 0 && (
                       <div className="flex flex-wrap justify-between items-center gap-1 pt-1 border-t border-primary/20 font-semibold text-foreground">
-                        <span>Valor do Estoque Atual ({numCurrentStock} {currentUnit}):</span>
-                        <span className="text-emerald-600 dark:text-emerald-400">
-                          {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(
-                            calcStockTotal
-                          )}
+                        <span>Equivalência do Estoque Atual ({numCurrentStock} {currentUnit}):</span>
+                        <span className="text-emerald-600 dark:text-emerald-400 font-bold">
+                          📦{" "}
+                          {
+                            calculateBoxBreakdown(numCurrentStock, currentUnit, {
+                              packageName: pkgName || "Caixa",
+                              packageSize: numPkgSize,
+                              packagePrice: numPkgPrice,
+                            }).summaryText
+                          }
                         </span>
                       </div>
                     )}
@@ -973,7 +1043,7 @@ export function ProductFormSheet({
                     Cadastro Mestre Permanente do Produto Acabado
                   </p>
                   <p>
-                    Este cadastro define o produto de forma permanente (preço de venda e custo padrão). Para lançar cada nova fornada ou lote produzido ao longo do tempo com data e quantidade, utilize o botão <strong>"Produzir / Novo Lote"</strong> diretamente na tabela de produtos ou estoque.
+                    Este cadastro define o produto de forma permanente (preço de venda, custo padrão e capacidade da caixa). Para lançar cada nova fornada ou lote produzido (em caixas ou unidades), utilize o botão <strong>"Produzir / Novo Lote"</strong> na tabela de produtos ou estoque.
                   </p>
                 </div>
               </div>
@@ -1022,23 +1092,68 @@ export function ProductFormSheet({
               <Label htmlFor="current_stock" className="font-semibold text-foreground">
                 Estoque Inicial / Atual ({currentUnit})
               </Label>
-              {numCurrentStock > 0 && ((numCurrentCost ?? 0) > 0 || calcUnitCost > 0) && (
-                <span className="text-xs text-muted-foreground font-medium">
-                  Valor em estoque:{" "}
-                  <strong className="text-foreground">
-                    {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(
-                      calcStockTotal
-                    )}
-                  </strong>
-                </span>
+              <div className="flex flex-wrap items-center gap-2">
+                {showPackagingCalc && numPkgSize > 1 && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 border border-primary/25 px-2.5 py-0.5 text-xs font-bold text-primary">
+                    📦{" "}
+                    {
+                      calculateBoxBreakdown(numCurrentStock, currentUnit, {
+                        packageName: pkgName || "Caixa",
+                        packageSize: numPkgSize,
+                        packagePrice: numPkgPrice,
+                      }).summaryText
+                    }
+                  </span>
+                )}
+                {numCurrentStock > 0 && ((numCurrentCost ?? 0) > 0 || calcUnitCost > 0) && (
+                  <span className="text-xs text-muted-foreground font-medium">
+                    Valor em estoque:{" "}
+                    <strong className="text-foreground">
+                      {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(
+                        calcStockTotal
+                      )}
+                    </strong>
+                  </span>
+                )}
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Input
+                id="current_stock"
+                inputMode="decimal"
+                placeholder="0"
+                className="flex-1 min-w-[140px]"
+                {...form.register("current_stock")}
+              />
+              {showPackagingCalc && numPkgSize > 1 && (
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-9 px-2.5 text-xs font-semibold"
+                    onClick={() => {
+                      const next = Math.max(0, numCurrentStock - numPkgSize);
+                      form.setValue("current_stock", next, { shouldDirty: true, shouldValidate: true });
+                    }}
+                  >
+                    -1 {pkgName} (-{numPkgSize})
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-9 px-2.5 text-xs font-semibold border-primary/40 text-primary hover:bg-primary/10"
+                    onClick={() => {
+                      const next = numCurrentStock + numPkgSize;
+                      form.setValue("current_stock", next, { shouldDirty: true, shouldValidate: true });
+                    }}
+                  >
+                    +1 {pkgName} (+{numPkgSize})
+                  </Button>
+                </div>
               )}
             </div>
-            <Input
-              id="current_stock"
-              inputMode="decimal"
-              placeholder="0"
-              {...form.register("current_stock")}
-            />
             {form.formState.errors.current_stock && (
               <p className="text-xs font-medium text-destructive">{form.formState.errors.current_stock.message}</p>
             )}

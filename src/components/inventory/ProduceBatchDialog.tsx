@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Calendar, CheckCircle2, Factory, PackageCheck, Tag } from "lucide-react";
+import { Box, Calendar, Factory, Hash, PackageCheck, Tag } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -20,6 +20,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { formatBRL, formatDateBR } from "@/lib/masks";
 import { parseBRDecimal } from "@/components/inventory/ProductFormSheet";
 import { insertPriceHistory } from "@/lib/priceHistoryApi";
+import { calculateBoxBreakdown, parsePackageMetadata } from "@/lib/packageConversion";
 
 export interface ProduceBatchDialogProps {
   product: {
@@ -29,6 +30,7 @@ export interface ProduceBatchDialogProps {
     current_stock: number;
     price_cost?: number | null;
     price_sale?: number | null;
+    description?: string | null;
   };
   trigger?: React.ReactNode;
   open?: boolean;
@@ -49,7 +51,16 @@ export function ProduceBatchDialog({
   const qc = useQueryClient();
   const { currentOrg } = useOrganization();
 
+  const pkg = React.useMemo(
+    () => parsePackageMetadata(product.description, product.name, product.unit),
+    [product.description, product.name, product.unit]
+  );
+  const hasBoxes = Boolean(pkg && pkg.packageSize > 1);
+
+  const [entryMode, setEntryMode] = React.useState<"boxes" | "units">("units");
   const [quantity, setQuantity] = React.useState<string>("");
+  const [boxesProduced, setBoxesProduced] = React.useState<string>("");
+  const [extraUnitsProduced, setExtraUnitsProduced] = React.useState<string>("");
   const [manufactureDate, setManufactureDate] = React.useState<string>(
     new Date().toISOString().slice(0, 10)
   );
@@ -64,7 +75,10 @@ export function ProduceBatchDialog({
 
   React.useEffect(() => {
     if (open) {
+      setEntryMode(hasBoxes ? "boxes" : "units");
       setQuantity("");
+      setBoxesProduced("");
+      setExtraUnitsProduced("");
       setManufactureDate(new Date().toISOString().slice(0, 10));
       setBatchCode("");
       setExpiryDate("");
@@ -75,11 +89,32 @@ export function ProduceBatchDialog({
       );
       setNotes("");
     }
-  }, [open, product.price_cost]);
+  }, [open, product.price_cost, hasBoxes]);
 
-  const numQty = React.useMemo(() => parseBRDecimal(quantity) ?? 0, [quantity]);
+  const numQty = React.useMemo(() => {
+    if (entryMode === "boxes" && pkg && pkg.packageSize > 1) {
+      const b = Math.max(0, parseBRDecimal(boxesProduced) ?? 0);
+      const u = Math.max(0, parseBRDecimal(extraUnitsProduced) ?? 0);
+      return Number((b * pkg.packageSize + u).toFixed(4));
+    }
+    return parseBRDecimal(quantity) ?? 0;
+  }, [entryMode, pkg, boxesProduced, extraUnitsProduced, quantity]);
+
   const numCost = React.useMemo(() => parseBRDecimal(unitCost), [unitCost]);
   const projectedStock = (Number(product.current_stock) || 0) + numQty;
+
+  const currentBreakdown = React.useMemo(
+    () => calculateBoxBreakdown(product.current_stock, product.unit, pkg),
+    [product.current_stock, product.unit, pkg]
+  );
+  const producedBreakdown = React.useMemo(
+    () => calculateBoxBreakdown(numQty, product.unit, pkg),
+    [numQty, product.unit, pkg]
+  );
+  const projectedBreakdown = React.useMemo(
+    () => calculateBoxBreakdown(projectedStock, product.unit, pkg),
+    [projectedStock, product.unit, pkg]
+  );
 
   const produceMutation = useMutation({
     mutationFn: async () => {
@@ -91,9 +126,13 @@ export function ProduceBatchDialog({
       }
 
       const trimmedBatch = batchCode.trim();
+      const boxSummarySuffix =
+        producedBreakdown.hasBoxes && numQty > 0
+          ? ` (${producedBreakdown.summaryText} = ${numQty} ${product.unit})`
+          : "";
       const reason = trimmedBatch
-        ? `Fabricação Lote ${trimmedBatch}`
-        : "Apontamento de Produção / Lote";
+        ? `Fabricação Lote ${trimmedBatch}${boxSummarySuffix}`
+        : `Apontamento de Produção / Lote${boxSummarySuffix}`;
 
       // 1. Aplica movimento de estoque via RPC (atômico e seguro)
       const { error: rpcErr } = await (supabase as any).rpc("apply_movement", {
@@ -133,6 +172,7 @@ export function ProduceBatchDialog({
       // 2. Se informou custo ou dados de lote, registra no histórico de fabricação
       const batchDetails = [
         trimmedBatch ? `Lote: ${trimmedBatch}` : null,
+        producedBreakdown.hasBoxes ? `Qtd: ${producedBreakdown.summaryText} (${numQty} ${product.unit})` : `Qtd: ${numQty} ${product.unit}`,
         expiryDate ? `Validade: ${formatDateBR(expiryDate)}` : null,
         notes.trim() ? notes.trim() : null,
       ]
@@ -161,8 +201,9 @@ export function ProduceBatchDialog({
       }
     },
     onSuccess: async () => {
+      const boxMsg = producedBreakdown.hasBoxes ? ` (${producedBreakdown.summaryText})` : "";
       toast.success(
-        `Lote fabricado com sucesso! +${numQty} ${product.unit} adicionados ao estoque de ${product.name}.`
+        `Lote fabricado com sucesso! +${numQty} ${product.unit}${boxMsg} adicionados ao estoque de ${product.name}.`
       );
       await qc.invalidateQueries({ queryKey: ["products"] });
       await qc.invalidateQueries({ queryKey: ["stock_movements"] });
@@ -192,52 +233,158 @@ export function ProduceBatchDialog({
               <DialogTitle className="text-lg font-bold">
                 Apontar Fabricação / Novo Lote
               </DialogTitle>
-              <DialogDescription className="text-xs text-muted-foreground">
+              <DialogDescription className="text-xs text-muted-foreground flex flex-wrap items-center gap-1.5">
                 <strong className="text-foreground">{product.name}</strong> • Saldo atual:{" "}
                 <span className="font-semibold text-foreground">
                   {product.current_stock} {product.unit}
                 </span>
+                {currentBreakdown.hasBoxes && (
+                  <span className="inline-flex items-center rounded bg-primary/10 px-1.5 py-0.5 text-[11px] font-semibold text-primary">
+                    📦 {currentBreakdown.summaryText}
+                  </span>
+                )}
               </DialogDescription>
             </div>
           </div>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="mt-4 space-y-4">
+          {hasBoxes && pkg && (
+            <div className="grid grid-cols-2 gap-1.5 rounded-lg bg-muted/50 p-1 border border-border/60">
+              <Button
+                type="button"
+                size="sm"
+                variant={entryMode === "boxes" ? "default" : "ghost"}
+                className="h-8 gap-1.5 text-xs font-semibold"
+                onClick={() => setEntryMode("boxes")}
+              >
+                <Box className="h-3.5 w-3.5" />
+                <span>Lançar em {pkg.packageName}s ({pkg.packageSize} {product.unit})</span>
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={entryMode === "units" ? "default" : "ghost"}
+                className="h-8 gap-1.5 text-xs font-semibold"
+                onClick={() => setEntryMode("units")}
+              >
+                <Hash className="h-3.5 w-3.5" />
+                <span>Lançar em {product.unit}</span>
+              </Button>
+            </div>
+          )}
+
           {/* QUANTIDADE PRODUZIDA & DATA */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="grid gap-1.5">
-              <Label htmlFor="batch-qty" className="text-xs font-semibold text-foreground">
-                Quantidade Fabricada ({product.unit}) *
-              </Label>
-              <Input
-                id="batch-qty"
-                placeholder="Ex: 50"
-                inputMode="decimal"
-                value={quantity}
-                onChange={(e) => setQuantity(e.target.value)}
-                className="font-bold text-sm"
-                autoFocus
-              />
-              {numQty > 0 && (
-                <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium">
-                  Novo saldo: <strong>{projectedStock} {product.unit}</strong> (+{numQty})
-                </p>
-              )}
-            </div>
+            {entryMode === "boxes" && hasBoxes && pkg ? (
+              <div className="grid gap-2 sm:col-span-2 rounded-lg border border-primary/25 bg-primary/5 p-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                  <div className="grid gap-1">
+                    <Label htmlFor="batch-boxes" className="text-xs font-semibold text-foreground">
+                      {pkg.packageName}s Fechadas ({pkg.packageSize} {product.unit}) *
+                    </Label>
+                    <Input
+                      id="batch-boxes"
+                      placeholder="Ex: 2"
+                      inputMode="decimal"
+                      value={boxesProduced}
+                      onChange={(e) => setBoxesProduced(e.target.value)}
+                      className="font-bold text-sm bg-background"
+                      autoFocus
+                    />
+                  </div>
+                  <div className="grid gap-1">
+                    <Label htmlFor="batch-extra-units" className="text-xs font-semibold text-foreground">
+                      + Avulsas ({product.unit})
+                    </Label>
+                    <Input
+                      id="batch-extra-units"
+                      placeholder="Ex: 0"
+                      inputMode="decimal"
+                      value={extraUnitsProduced}
+                      onChange={(e) => setExtraUnitsProduced(e.target.value)}
+                      className="font-medium text-sm bg-background"
+                    />
+                  </div>
+                  <div className="grid gap-1">
+                    <Label htmlFor="batch-date" className="text-xs font-semibold text-foreground flex items-center gap-1">
+                      <Calendar className="h-3.5 w-3.5 text-primary" />
+                      Data de Fabricação *
+                    </Label>
+                    <Input
+                      id="batch-date"
+                      type="date"
+                      value={manufactureDate}
+                      onChange={(e) => setManufactureDate(e.target.value)}
+                      className="text-xs font-medium bg-background"
+                    />
+                  </div>
+                </div>
 
-            <div className="grid gap-1.5">
-              <Label htmlFor="batch-date" className="text-xs font-semibold text-foreground flex items-center gap-1">
-                <Calendar className="h-3.5 w-3.5 text-primary" />
-                Data de Fabricação *
-              </Label>
-              <Input
-                id="batch-date"
-                type="date"
-                value={manufactureDate}
-                onChange={(e) => setManufactureDate(e.target.value)}
-                className="text-xs font-medium"
-              />
-            </div>
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                  <div className="flex items-center gap-1">
+                    <span className="text-[11px] text-muted-foreground mr-1">Atalhos:</span>
+                    {[1, 2, 5, 10].map((n) => (
+                      <Button
+                        key={n}
+                        type="button"
+                        size="sm"
+                        variant={boxesProduced === String(n) ? "default" : "outline"}
+                        className="h-6 px-2 text-[11px] font-semibold"
+                        onClick={() => setBoxesProduced(String(n))}
+                      >
+                        +{n} cx ({n * pkg.packageSize})
+                      </Button>
+                    ))}
+                  </div>
+                  {numQty > 0 && (
+                    <p className="text-xs text-emerald-600 dark:text-emerald-400 font-semibold">
+                      Total: <strong>+{numQty} {product.unit}</strong> → Novo saldo:{" "}
+                      <strong>{projectedStock} {product.unit}</strong> (📦 {projectedBreakdown.summaryText})
+                    </p>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="grid gap-1.5">
+                  <Label htmlFor="batch-qty" className="text-xs font-semibold text-foreground">
+                    Quantidade Fabricada ({product.unit}) *
+                  </Label>
+                  <Input
+                    id="batch-qty"
+                    placeholder="Ex: 200"
+                    inputMode="decimal"
+                    value={quantity}
+                    onChange={(e) => setQuantity(e.target.value)}
+                    className="font-bold text-sm"
+                    autoFocus
+                  />
+                  {numQty > 0 && (
+                    <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium">
+                      Novo saldo: <strong>{projectedStock} {product.unit}</strong> (+{numQty})
+                      {projectedBreakdown.hasBoxes && (
+                        <span> • 📦 {projectedBreakdown.summaryText}</span>
+                      )}
+                    </p>
+                  )}
+                </div>
+
+                <div className="grid gap-1.5">
+                  <Label htmlFor="batch-date" className="text-xs font-semibold text-foreground flex items-center gap-1">
+                    <Calendar className="h-3.5 w-3.5 text-primary" />
+                    Data de Fabricação *
+                  </Label>
+                  <Input
+                    id="batch-date"
+                    type="date"
+                    value={manufactureDate}
+                    onChange={(e) => setManufactureDate(e.target.value)}
+                    className="text-xs font-medium"
+                  />
+                </div>
+              </>
+            )}
           </div>
 
           {/* LOTE & VALIDADE */}
