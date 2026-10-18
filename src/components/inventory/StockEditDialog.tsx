@@ -199,12 +199,12 @@ export function StockEditDialog({ open, onOpenChange, product }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[calc(100%-2rem)] max-h-[90dvh] overflow-y-auto rounded-xl p-5 sm:max-w-[440px] sm:p-6">
-        <DialogHeader>
-          <DialogTitle className="truncate pr-6 text-left leading-snug" title={product.name}>
+      <DialogContent className="w-[calc(100%-2rem)] max-h-[90dvh] overflow-y-auto overflow-x-hidden rounded-xl p-5 sm:max-w-[460px] sm:p-6">
+        <DialogHeader className="min-w-0 pr-6">
+          <DialogTitle className="break-words text-left text-base font-bold leading-snug" title={product.name}>
             Ajustar Estoque: {product.name}
           </DialogTitle>
-          <DialogDescription className="text-left text-xs">
+          <DialogDescription className="text-left text-xs pt-0.5">
             Saldo atual:{" "}
             <strong className="text-foreground">
               {product.current_stock} {product.unit}
@@ -217,28 +217,28 @@ export function StockEditDialog({ open, onOpenChange, product }: Props) {
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4 pt-1">
+        <form onSubmit={handleSubmit} className="space-y-4 pt-1 min-w-0">
           {/* SELETOR DE MODO: CAIXAS vs UNIDADES */}
           <div className="grid grid-cols-2 gap-1.5 rounded-lg bg-muted/50 p-1 border border-border/60">
             <Button
               type="button"
               size="sm"
               variant={mode === "boxes" ? "default" : "ghost"}
-              className="h-8 gap-1.5 text-xs font-semibold"
+              className="h-8 gap-1.5 text-xs font-semibold min-w-0"
               onClick={() => handleSwitchMode("boxes")}
             >
-              <Box className="h-3.5 w-3.5" />
-              <span>Por Caixas + {product.unit}</span>
+              <Box className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate">Por Caixas + {product.unit}</span>
             </Button>
             <Button
               type="button"
               size="sm"
               variant={mode === "units" ? "default" : "ghost"}
-              className="h-8 gap-1.5 text-xs font-semibold"
+              className="h-8 gap-1.5 text-xs font-semibold min-w-0"
               onClick={() => handleSwitchMode("units")}
             >
-              <Hash className="h-3.5 w-3.5" />
-              <span>Total em {product.unit}</span>
+              <Hash className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate">Total em {product.unit}</span>
             </Button>
           </div>
 
@@ -246,18 +246,20 @@ export function StockEditDialog({ open, onOpenChange, product }: Props) {
           {(mode === "boxes" || existingPkg || showConfigBox) && (
             <div className="rounded-lg border border-border/70 bg-muted/20 p-2.5 space-y-2">
               <div className="flex items-center justify-between gap-2">
-                <span className="text-xs text-muted-foreground flex items-center gap-1.5">
-                  <Box className="h-3.5 w-3.5 text-primary" />
-                  Capacidade:{" "}
-                  <strong className="text-foreground">
-                    1 {boxNameInput} = {activeBoxSize || 200} {product.unit}
-                  </strong>
+                <span className="text-xs text-muted-foreground flex items-center gap-1.5 min-w-0">
+                  <Box className="h-3.5 w-3.5 text-primary shrink-0" />
+                  <span className="truncate">
+                    Capacidade:{" "}
+                    <strong className="text-foreground">
+                      1 {boxNameInput} = {activeBoxSize || 200} {product.unit}
+                    </strong>
+                  </span>
                 </span>
                 <Button
                   type="button"
                   variant="ghost"
                   size="sm"
-                  className="h-6 px-2 text-[11px] gap-1 text-primary"
+                  className="h-6 px-2 text-[11px] gap-1 text-primary shrink-0"
                   onClick={() => setShowConfigBox(!showConfigBox)}
                 >
                   <Settings2 className="h-3 w-3" />
@@ -277,7 +279,7 @@ export function StockEditDialog({ open, onOpenChange, product }: Props) {
                       min={2}
                       value={boxSizeInput}
                       onChange={(e) => handleBoxSizeChange(e.target.value)}
-                      className="h-8 text-xs font-bold flex-1"
+                      className="h-8 text-xs font-bold min-w-0 flex-1"
                       placeholder="Ex: 200"
                     />
                     {["200", "100", "50"].map((preset) => (
@@ -286,7 +288,7 @@ export function StockEditDialog({ open, onOpenChange, product }: Props) {
                         type="button"
                         size="sm"
                         variant={boxSizeInput === preset ? "default" : "outline"}
-                        className="h-8 px-2 text-[11px] font-semibold"
+                        className="h-8 px-2 text-[11px] font-semibold shrink-0"
                         onClick={() => handleBoxSizeChange(preset)}
                       >
                         {preset}
@@ -301,12 +303,12 @@ export function StockEditDialog({ open, onOpenChange, product }: Props) {
           {/* ENTRADA DE DADOS SEGUNDO O MODO */}
           {mode === "boxes" && activePkg ? (
             <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <Label htmlFor="stock-boxes" className="text-xs font-semibold">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1.5 min-w-0">
+                  <Label htmlFor="stock-boxes" className="text-xs font-semibold block truncate">
                     {activePkg.packageName}s Fechadas ({activePkg.packageSize} {product.unit})
                   </Label>
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-1.5">
                     <Button
                       type="button"
                       variant="outline"
@@ -327,7 +329,7 @@ export function StockEditDialog({ open, onOpenChange, product }: Props) {
                       step="1"
                       value={boxesCount}
                       onChange={(e) => setBoxesCount(e.target.value)}
-                      className="h-10 text-center font-bold text-base"
+                      className="h-10 min-w-0 flex-1 px-2 text-center font-bold text-base"
                       autoFocus
                     />
                     <Button
@@ -345,8 +347,8 @@ export function StockEditDialog({ open, onOpenChange, product }: Props) {
                   </div>
                 </div>
 
-                <div className="space-y-1.5">
-                  <Label htmlFor="stock-loose" className="text-xs font-semibold">
+                <div className="space-y-1.5 min-w-0">
+                  <Label htmlFor="stock-loose" className="text-xs font-semibold block truncate">
                     Unidades Avulsas ({product.unit})
                   </Label>
                   <Input
@@ -357,7 +359,7 @@ export function StockEditDialog({ open, onOpenChange, product }: Props) {
                     step="any"
                     value={looseCount}
                     onChange={(e) => setLooseCount(e.target.value)}
-                    className="h-10 font-semibold text-base"
+                    className="h-10 min-w-0 w-full font-semibold text-base"
                   />
                 </div>
               </div>
@@ -383,22 +385,23 @@ export function StockEditDialog({ open, onOpenChange, product }: Props) {
 
           {/* RESUMO DA CONVERSÃO E IMPACTO */}
           <div className="rounded-lg border border-primary/25 bg-primary/5 p-3 text-xs space-y-1">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-2">
               <span className="text-muted-foreground font-medium">Novo Saldo Total:</span>
               <span className="font-extrabold text-sm text-foreground">
                 {computedTotalStock} {product.unit}
               </span>
             </div>
             {projectedBreakdown.hasBoxes && (
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-2">
                 <span className="text-muted-foreground">Equivalência em Caixas:</span>
                 <span className="font-bold text-primary">
-                  📦 {projectedBreakdown.summaryText} ({projectedBreakdown.formattedTotalBoxes} cx)
+                  📦 {projectedBreakdown.summaryText}
+                  {projectedBreakdown.looseUnits > 0 ? ` (${projectedBreakdown.formattedTotalBoxes} cx)` : ""}
                 </span>
               </div>
             )}
             {delta !== 0 && (
-              <div className="flex items-center justify-between pt-1 border-t border-primary/20">
+              <div className="flex items-center justify-between gap-2 pt-1 border-t border-primary/20">
                 <span className="text-muted-foreground">Ajuste a lançar no Kardex:</span>
                 <span className={delta > 0 ? "font-bold text-emerald-600" : "font-bold text-destructive"}>
                   {delta > 0 ? `+${delta}` : delta} {product.unit}

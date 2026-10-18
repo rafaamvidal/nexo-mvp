@@ -223,18 +223,18 @@ export function ProduceBatchDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       {trigger && <DialogTrigger asChild>{trigger}</DialogTrigger>}
-      <DialogContent className="glass max-w-lg border border-border/60 p-4 sm:p-6">
-        <DialogHeader className="border-b border-border/50 pb-3">
-          <div className="flex items-center gap-2">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
+      <DialogContent className="glass max-w-lg max-h-[90dvh] overflow-y-auto overflow-x-hidden border border-border/60 p-4 sm:p-6">
+        <DialogHeader className="border-b border-border/50 pb-3 min-w-0 pr-6">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
               <Factory className="h-5 w-5" />
             </div>
-            <div>
-              <DialogTitle className="text-lg font-bold">
+            <div className="min-w-0">
+              <DialogTitle className="text-lg font-bold leading-snug">
                 Apontar Fabricação / Novo Lote
               </DialogTitle>
               <DialogDescription className="text-xs text-muted-foreground flex flex-wrap items-center gap-1.5">
-                <strong className="text-foreground">{product.name}</strong> • Saldo atual:{" "}
+                <strong className="text-foreground break-words">{product.name}</strong> • Saldo atual:{" "}
                 <span className="font-semibold text-foreground">
                   {product.current_stock} {product.unit}
                 </span>
@@ -248,28 +248,28 @@ export function ProduceBatchDialog({
           </div>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="mt-4 space-y-4">
+        <form onSubmit={handleSubmit} className="mt-4 space-y-4 min-w-0">
           {hasBoxes && pkg && (
             <div className="grid grid-cols-2 gap-1.5 rounded-lg bg-muted/50 p-1 border border-border/60">
               <Button
                 type="button"
                 size="sm"
                 variant={entryMode === "boxes" ? "default" : "ghost"}
-                className="h-8 gap-1.5 text-xs font-semibold"
+                className="h-8 gap-1.5 text-xs font-semibold min-w-0"
                 onClick={() => setEntryMode("boxes")}
               >
-                <Box className="h-3.5 w-3.5" />
-                <span>Lançar em {pkg.packageName}s ({pkg.packageSize} {product.unit})</span>
+                <Box className="h-3.5 w-3.5 shrink-0" />
+                <span className="truncate">Lançar em {pkg.packageName}s ({pkg.packageSize} {product.unit})</span>
               </Button>
               <Button
                 type="button"
                 size="sm"
                 variant={entryMode === "units" ? "default" : "ghost"}
-                className="h-8 gap-1.5 text-xs font-semibold"
+                className="h-8 gap-1.5 text-xs font-semibold min-w-0"
                 onClick={() => setEntryMode("units")}
               >
-                <Hash className="h-3.5 w-3.5" />
-                <span>Lançar em {product.unit}</span>
+                <Hash className="h-3.5 w-3.5 shrink-0" />
+                <span className="truncate">Lançar em {product.unit}</span>
               </Button>
             </div>
           )}
